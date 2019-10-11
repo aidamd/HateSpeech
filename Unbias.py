@@ -74,42 +74,52 @@ class Unbias():
                             begin=[0, 0],
                             size=[shape[0], self.offensive_size])
 
-        self.offensive_logits = tf.layers.dense(self.offensive, 2)
-        self.offensive_xentropy = tf.losses.sparse_softmax_cross_entropy(
-            labels=tf.cast(self.offensive_label, tf.int32),
-            logits=self.offensive_logits)
+        self.task = {"offensive": self.classify(self.offensive,
+                                                num_labels=2,
+                                                labels=self.offensive_label,
+                                                learning_rate=self.offensive_learning_rate),
+                     "hate": self.classify(self.representation,
+                                          num_labels=2,
+                                          labels=self.hate_label,
+                                          learning_rate=self.hate_learning_rate),
+                     "SGT": self.classify(self.SGT,
+                                         num_labels=self.num_SGT + 1,
+                                         labels=self.SGT_label,
+                                         learning_rate=self.SGT_learning_rate),
+                     "SGT_off": self.classify(self.offensive,
+                                             num_labels=self.num_SGT + 1,
+                                             labels=self.SGT_label,
+                                             learning_rate=self.SGT_off_learning_rate,
+                                             maximize=True)}
 
-        self.offensive_loss = tf.reduce_mean(self.offensive_xentropy)
-        self.offensive_step = tf.train.AdamOptimizer(learning_rate=self.offensive_learning_rate)\
-            .minimize(self.offensive_loss)
+    def classify(self, latent, num_labels, labels, learning_rate, maximize=False):
+        task = dict()
+        task["logits"] = tf.layers.dense(latent, num_labels)
+        task["xentropy"] = tf.losses.sparse_softmax_cross_entropy(
+            labels=tf.cast(labels, tf.int32),
+            logits=task["logits"])
 
-        self.hate_logits = tf.layers.dense(self.representation, 2)
-        self.hate_xentropy = tf.losses.sparse_softmax_cross_entropy(
-            labels=tf.cast(self.hate_label, tf.int32),
-            logits=self.hate_logits)
+        task["loss"] = tf.reduce_mean(task["xentropy"])
+        task["step"] = tf.train.AdamOptimizer(learning_rate=learning_rate)\
+            .minimize(-task["loss"] if maximize else task["loss"])
 
-        self.hate_loss = tf.reduce_mean(self.hate_xentropy)
-        self.hate_step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate) \
-            .minimize(self.hate_loss)
+        task["predicted"] = tf.argmax(task["logits"], 1)
+        task["accuracy"] = tf.reduce_mean(
+            tf.cast(tf.equal(task["predicted"],labels), tf.float32))
 
-        self.SGT_logits = tf.layers.dense(self.SGT, self.num_SGT + 1)
-        self.SGT_xentropy = tf.losses.sparse_softmax_cross_entropy(
-            labels=tf.cast(self.SGT_label, tf.int32),
-            logits=self.SGT_logits)
+        return task
 
-        self.SGT_loss = tf.reduce_mean(self.SGT_xentropy)
-        self.SGT_step = tf.train.AdamOptimizer(learning_rate=self.SGT_learning_rate) \
-            .minimize(self.SGT_loss)
-
-        self.SGT_off_logits = tf.layers.dense(self.offensive, self.num_SGT + 1)
-        self.SGT_off_xentropy = tf.losses.sparse_softmax_cross_entropy(
-            labels=tf.cast(self.SGT_label, tf.int32),
-            logits=self.SGT_off_logits)
-
-        self.SGT_off_loss = tf.reduce_mean(self.SGT_off_xentropy)
-        self.SGT_off_step = tf.train.AdamOptimizer(learning_rate=self.SGT_off_learning_rate) \
-            .minimize(-self.SGT_off_loss)
-
+    def feed_dict(self, batch, test=False):
+        feed_dict = {
+            self.encoder_input: [t["enc_input"] for t in batch],
+            self.hate_label: [t["hate"] for t in batch],
+            self.offensive_label: [t["offensive"] for t in batch],
+            self.sequence_length: [t["length"] for t in batch],
+            self.SGT_label: [t["SGT"] for t in batch],
+            self.keep_prob: 1 if test else self.keep_ratio ,
+            self.embedding_placeholder: self.embeddings
+        }
+        return feed_dict
 
     def train(self, batches):
         init = tf.global_variables_initializer()
@@ -121,34 +131,53 @@ class Unbias():
                       "hate": list(),
                       "SGT": list(),
                       "SGT_off": list()}
+
+            hate_accuracy = {"train": list(),
+                             "test": list()}
+            offensive_accuracy = {"train": list(),
+                                  "test": list()}
+            SGT_accuracy = {"train": list(),
+                            "test": list(),}
+
             while True:
                 off_loss, hate_loss, sgt_loss, sgt_off_loss = 0, 0, 0, 0
+                off_acc, hate_acc, sgt_acc = 0, 0 ,0
+                off_acc_test, hate_acc_test, sgt_acc_test = 0, 0 ,0
+
                 #_ = self.sess.run(self.embedding_init,
                 #                  feed_dict = {self.embedding_placeholder: self.embeddings})
                 train_idx, test_idx = train_test_split(np.arange(len(batches),test_size=0.2), shuffle=True)
                 train_batches = [batches[i] for i in train_idx]
                 test_batches = [batches[i] for i in test_idx]
                 for batch in train_batches:
-                    feed_dict = {
-                        self.encoder_input: [t["enc_input"] for t in batch],
-                        self.hate_label: [t["hate"] for t in batch],
-                        self.offensive_label: [t["offensive"] for t in batch],
-                        self.sequence_length: [t["length"] for t in batch],
-                        self.SGT_label: [t["SGT"] for t in batch],
-                        self.keep_prob: self.keep_ratio,
-                        self.embedding_placeholder: self.embeddings
-                    }
-
-
                     _, _, _, _, sgt_l, off_l, hate_l, sgt_off_l = self.sess.run(
-                        [self.SGT_step, self.hate_step, self.offensive_step, self.SGT_off_step,
-                        self.SGT_loss, self.offensive_loss, self.hate_loss, self.SGT_off_loss],
-                        feed_dict=feed_dict)
+                        [self.task["SGT"]["step"], self.task["hate"]["step"],
+                         self.task["offensive"]["step"], self.task["SGT_off"]["step"],
+                         self.task["SGT"]["loss"], self.task["offensive"]["loss"],
+                         self.task["hate"]["loss"], self.task["SGT_off"]["loss"]],
+                        feed_dict=self.feed_dict(batch))
+
                     sgt_loss += sgt_l
                     hate_loss += hate_l
                     off_loss += off_l
                     sgt_off_loss += sgt_off_l
 
+                    sgt_a, off_a, hate_a = self.sess.run(
+                        [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],
+                         self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch))
+
+                    sgt_acc += sgt_a
+                    hate_acc += hate_a
+                    off_acc += off_a
+
+                for batch in test_batches:
+                    sgt_a_test, off_a_test, hate_a_test = self.sess.run(
+                        [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],
+                         self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch, True))
+
+                    sgt_acc_test += sgt_a_test
+                    hate_acc_test += hate_a_test
+                    off_acc_test += off_a_test
 
                 print("Iterations: %d\n Hate loss: %.4f"
                       "\n Offensive loss: %.4f\n SGT loss: %.4f\n "
@@ -156,10 +185,18 @@ class Unbias():
                       (epoch, off_loss / len(batches), hate_loss / len(batches),
                        sgt_loss / len(batches), sgt_off_loss / len(batches)))
 
-                losses["SGT"].append(sgt_loss / len(batches))
-                losses["hate"].append(hate_loss / len(batches))
-                losses["offensive"].append(off_loss / len(batches))
-                losses["SGT_off"].append(sgt_off_loss / len(batches))
+                losses["SGT"].append(sgt_loss / len(train_batches))
+                losses["hate"].append(hate_loss / len(train_batches))
+                losses["offensive"].append(off_loss / len(train_batches))
+                losses["SGT_off"].append(sgt_off_loss / len(train_batches))
+
+                SGT_accuracy["train"].append(sgt_acc / len(train_batches))
+                hate_accuracy["train"].append(hate_acc / len(train_batches))
+                offensive_accuracy["train"].append(off_acc / len(train_batches))
+
+                SGT_accuracy["test"].append(sgt_acc_test / len(test_batches))
+                hate_accuracy["test"].append(hate_acc_test / len(test_batches))
+                offensive_accuracy["test"].append(off_acc_test / len(test_batches))
 
                 epoch += 1
 
