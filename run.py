@@ -26,7 +26,7 @@ def oversample(source_df, params):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", help="Path to data; includes a text columns and a style comment of 0s and 1s")
+    parser.add_argument("--data", help="Path to data; includes text, hate and offensive columns")
     parser.add_argument("--params", help="Parameter files. should be a json file")
 
     args = parser.parse_args()

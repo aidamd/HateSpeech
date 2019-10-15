@@ -37,9 +37,9 @@ class Unbias():
         self.sequence_length = tf.placeholder(tf.int32, [None], name="seq_len")
 
         # [batch_size]
-        self.offensive_label = tf.placeholder(tf.float32, [None], name="offensive_labels")
-        self.hate_label = tf.placeholder(tf.float32, [None], name="hate_labels")
-        self.SGT_label = tf.placeholder(tf.float32, [None], name="SGT_labels")
+        self.offensive_label = tf.placeholder(tf.int64, [None], name="offensive_labels")
+        self.hate_label = tf.placeholder(tf.int64, [None], name="hate_labels")
+        self.SGT_label = tf.placeholder(tf.int64, [None], name="SGT_labels")
 
         emb_W = tf.Variable(tf.constant(0.0,
                                         shape=[len(self.vocab), self.embedding_size]),
@@ -105,7 +105,7 @@ class Unbias():
 
         task["predicted"] = tf.argmax(task["logits"], 1)
         task["accuracy"] = tf.reduce_mean(
-            tf.cast(tf.equal(task["predicted"],labels), tf.float32))
+            tf.cast(tf.equal(task["predicted"], labels), tf.float32))
 
         return task
 
@@ -146,7 +146,7 @@ class Unbias():
 
                 #_ = self.sess.run(self.embedding_init,
                 #                  feed_dict = {self.embedding_placeholder: self.embeddings})
-                train_idx, test_idx = train_test_split(np.arange(len(batches),test_size=0.2), shuffle=True)
+                train_idx, test_idx = train_test_split(np.arange(len(batches)), test_size=0.2, shuffle=True)
                 train_batches = [batches[i] for i in train_idx]
                 test_batches = [batches[i] for i in test_idx]
                 for batch in train_batches:
@@ -202,7 +202,10 @@ class Unbias():
 
                 if epoch == self.epochs:
                     saver.save(self.sess, "saved_model/model")
-                    pd.DataFrame.from_dict(losses).to_csv("losses.csv")
+                    pd.DataFrame.from_dict(losses).to_csv("plots/losses.csv")
+                    pd.DataFrame.from_dict(SGT_accuracy).to_csv("plots/SGT.csv")
+                    pd.DataFrame.from_dict(hate_accuracy).to_csv("plots/hate.csv")
+                    pd.DataFrame.from_dict(offensive_accuracy).to_csv("plots/offensive.csv")
                     plot()
                     break
 
