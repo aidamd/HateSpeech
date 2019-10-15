@@ -42,17 +42,17 @@ if __name__ == "__main__":
     print(Counter(nh))
     pd.DataFrame.from_dict({"Change": list(Counter(nh).keys()),
                            "Frequency": list(Counter(nh).values())})\
-        .to_csv("became_hate.csv", index=False)
+        .to_csv(args.data + "/became_hate.csv", index=False)
     pd.DataFrame.from_dict({"Change": list(Counter(nh_change).keys()),
                            "Frequency": list(Counter(nh_change).values())})\
-        .to_csv("became_hate_SGT.csv", index=False)
+        .to_csv(args.data + "/became_hate_SGT.csv", index=False)
 
 
     print("Changes that made the text not hateful")
     print(Counter(hn))
     pd.DataFrame.from_dict({"Change": list(Counter(hn).keys()),
                            "Frequency": list(Counter(hn).values())})\
-        .to_csv("became_nonhate.csv", index=False)
+        .to_csv(args.data + "/became_nonhate.csv", index=False)
     pd.DataFrame.from_dict({"Change": list(Counter(hn_change).keys()),
                            "Frequency": list(Counter(hn_change).values())})\
-        .to_csv("became_nonhate_SGT.csv", index=False)
+        .to_csv(args.data + "/became_nonhate_SGT.csv", index=False)

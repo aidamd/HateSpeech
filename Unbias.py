@@ -208,7 +208,7 @@ class Unbias():
         with tf.Session() as self.sess:
             saver.restore(self.sess, "saved_model/model")
             for batch in batches:
-                predicted_hate.extend(self.sess.run(
-                    [self.task["hate"]["predicted"]],
-                    feed_dict=self.feed_dict(batch)))
+                predicted_hate.extend(list(self.sess.run(
+                    self.task["hate"]["predicted"],
+                    feed_dict=self.feed_dict(batch))))
         return predicted_hate
