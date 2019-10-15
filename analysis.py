@@ -1,48 +1,58 @@
 import pandas as pd
 from collections import Counter
+import argparse
 
-fake = pd.read_csv("predictions.csv")
-orig = pd.read_csv("Data/gab.csv")
-samples = set(fake["sample"].tolist())
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data")
+    args = parser.parse_args()
 
-# the changes that changes a non hate text to hate
-hn = list()
-hn_change = list()
+    if args.data == "biased":
+        fake = pd.read_csv("predictions.csv")
+    else:
+        fake = pd.read_csv("unbiased_predictions.csv")
 
-# the changes that changes a hate text to non hate
-nh = list()
-nh_change = list()
+    orig = pd.read_csv("Data/gab.csv")
+    samples = set(fake["sample"].tolist())
 
-for s in samples:
-    subset = fake.loc[fake["sample"] == s]
-    if len(set(subset["predicted_hate"])) > 1:
-        print("original text = " + orig.iloc[s, 3])
-        print("original label = " + "Hate" if orig.iloc[s, 1] == 1 else "Not Hate")
-        for i, row in subset.iterrows():
-            if row["predicted_hate"] != orig.iloc[s, 1]:
-                print(row["SGT"])
-                if orig.iloc[s, 1] == 1:
-                    hn.append(row["origin_SGT"] + "->" + row["SGT"])
-                    hn_change.append(row["SGT"])
-                else:
-                    nh.append(row["origin_SGT"] + "->" + row["SGT"])
-                    nh_change.append(row["SGT"])
+    # the changes that changes a non hate text to hate
+    hn = list()
+    hn_change = list()
 
-print("Changes that made the text hateful")
-print(Counter(nh))
-pd.DataFrame.from_dict({"Change": list(Counter(nh).keys()),
-                       "Frequency": list(Counter(nh).values())})\
-    .to_csv("became_hate.csv", index=False)
-pd.DataFrame.from_dict({"Change": list(Counter(nh_change).keys()),
-                       "Frequency": list(Counter(nh_change).values())})\
-    .to_csv("became_hate_SGT.csv", index=False)
+    # the changes that changes a hate text to non hate
+    nh = list()
+    nh_change = list()
+
+    for s in samples:
+        subset = fake.loc[fake["sample"] == s]
+        if len(set(subset["predicted_hate"])) > 1:
+            print("original text = " + orig.iloc[s, 3])
+            print("original label = " + "Hate" if orig.iloc[s, 1] == 1 else "Not Hate")
+            for i, row in subset.iterrows():
+                if row["predicted_hate"] != orig.iloc[s, 1]:
+                    print(row["SGT"])
+                    if orig.iloc[s, 1] == 1:
+                        hn.append(row["origin_SGT"] + "->" + row["SGT"])
+                        hn_change.append(row["SGT"])
+                    else:
+                        nh.append(row["origin_SGT"] + "->" + row["SGT"])
+                        nh_change.append(row["SGT"])
+
+    print("Changes that made the text hateful")
+    print(Counter(nh))
+    pd.DataFrame.from_dict({"Change": list(Counter(nh).keys()),
+                           "Frequency": list(Counter(nh).values())})\
+        .to_csv("became_hate.csv", index=False)
+    pd.DataFrame.from_dict({"Change": list(Counter(nh_change).keys()),
+                           "Frequency": list(Counter(nh_change).values())})\
+        .to_csv("became_hate_SGT.csv", index=False)
 
 
-print("Changes that made the text not hateful")
-print(Counter(hn))
-pd.DataFrame.from_dict({"Change": list(Counter(hn).keys()),
-                       "Frequency": list(Counter(hn).values())})\
-    .to_csv("became_nonhate.csv", index=False)
-pd.DataFrame.from_dict({"Change": list(Counter(hn_change).keys()),
-                       "Frequency": list(Counter(hn_change).values())})\
-    .to_csv("became_nonhate_SGT.csv", index=False)
+    print("Changes that made the text not hateful")
+    print(Counter(hn))
+    pd.DataFrame.from_dict({"Change": list(Counter(hn).keys()),
+                           "Frequency": list(Counter(hn).values())})\
+        .to_csv("became_nonhate.csv", index=False)
+    pd.DataFrame.from_dict({"Change": list(Counter(hn_change).keys()),
+                           "Frequency": list(Counter(hn_change).values())})\
+        .to_csv("became_nonhate_SGT.csv", index=False)
