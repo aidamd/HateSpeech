@@ -7,10 +7,7 @@ if __name__ == "__main__":
     parser.add_argument("--data")
     args = parser.parse_args()
 
-    if args.data == "biased":
-        fake = pd.read_csv("predictions.csv")
-    else:
-        fake = pd.read_csv("unbiased_predictions.csv")
+    fake = pd.read_csv(args.data + "/predictions.csv")
 
     orig = pd.read_csv("Data/gab.csv")
     samples = set(fake["sample"].tolist())
