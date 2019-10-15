@@ -34,7 +34,7 @@ def check_bias(source_df, params):
     predictions = model.predict_hate(batches)
 
     fake_df["predicted_hate"] = predictions
-    fake_df.data.to_csv("unbiased_predictions.csv", index=False)
+    fake_df.to_csv("unbiased_predictions.csv", index=False)
 
 
 if __name__ == '__main__':
