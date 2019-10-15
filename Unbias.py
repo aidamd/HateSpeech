@@ -100,6 +100,7 @@ class Unbias():
         return task
 
     def feed_dict(self, batch, test=False):
+        print(self.embeddings.shape)
         feed_dict = {
             self.encoder_input: [t["enc_input"] for t in batch],
             self.sequence_length: [t["length"] for t in batch],

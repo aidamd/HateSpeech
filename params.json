@@ -7,7 +7,7 @@
   "embedding_size": 300,
   "num_layers": 1,
   "SGT_learning_rate": 0.0001,
-  "offensive_learning_rate": 0.0001,
+  "offensive_learning_rate": 0.00001,
   "hate_learning_rate": 0.0001,
   "SGT_off_learning_rate": 0.0001,
   "batch_size": 128,
