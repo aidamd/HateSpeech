@@ -139,7 +139,7 @@ def learn_vocab(corpus, vocab_size):
             else:
                 tokens[token] = 1
     words, counts = zip(*sorted(tokens.items(), key=operator.itemgetter(1), reverse=True))
-    return list(words[:vocab_size]) + ["<unk>", "<pad>", "<go>", "<eos>"]
+    return list(words[:vocab_size]) + ["<unk>", "<pad>"]
 
 def tokens_to_ids(corpus, vocab, SGT_path):
     print("Converting corpus of size %d to word indices based on learned vocabulary" % len(corpus))
