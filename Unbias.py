@@ -210,5 +210,5 @@ class Unbias():
             for batch in batches:
                 predicted_hate.extend(list(self.sess.run(
                     self.task["hate"]["predicted"],
-                    feed_dict=self.feed_dict(batch), True)))
+                    feed_dict=self.feed_dict(batch, True))))
         return predicted_hate
