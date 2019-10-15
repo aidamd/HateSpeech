@@ -108,11 +108,10 @@ class Unbias():
             self.embedding_placeholder: self.embeddings
         }
         if not test:
-            feed_dict = {
+            feed_dict.update({
                 self.hate_label: [t["hate"] for t in batch],
                 self.offensive_label: [t["offensive"] for t in batch],
-                self.SGT_label: [t["SGT"] for t in batch]
-            }
+                self.SGT_label: [t["SGT"] for t in batch]})
         return feed_dict
 
     def train(self, batches):
