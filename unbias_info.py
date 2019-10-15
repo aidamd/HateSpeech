@@ -7,7 +7,7 @@ import pickle
 
 
 
-def oversample(source_df, params):
+def check_bias(source_df, params):
     print(source_df.shape[0], "datapoints")
     source_df = tokenize_data(source_df, "text")
     source_df = remove_empty(source_df, "text")
@@ -19,13 +19,22 @@ def oversample(source_df, params):
     params["num_SGT"] = count
 
     model = Unbias(params, vocab)
-    batches = get_batches(df_tokens,
-                          model.batch_size,
-                          vocab.index("<pad>"),
-                          source_df["hate"].tolist(),
-                          source_df["offensive"].tolist(),
-                          SGT)
-    model.train(batches)
+
+    fake_df = pd.read_csv("Data/fake_gab.csv")
+    fake_df = tokenize_data(fake_df, "text")
+    fake_df = remove_empty(fake_df, "text")
+    print(fake_df.shape[0], "datapoints in fake data")
+    fake_text = fake_df["text"].values.tolist()
+    fake_tokens, SGT, count = tokens_to_ids(fake_text, vocab, params["SGT_path"])
+
+    batches = get_batches(fake_tokens,
+                          params["batch_size"],
+                          vocab.index("<pad>"))
+
+    predictions = model.predict_hate(batches)
+
+    fake_df["predicted_hate"] = predictions
+    fake_df.data.to_csv("unbiased_predictions.csv", index=False)
 
 
 if __name__ == '__main__':
@@ -47,5 +56,5 @@ if __name__ == '__main__':
     except Exception:
         print("Wrong params file")
         exit(1)
-    oversample(data, params)
+    check_bias(data, params)
 

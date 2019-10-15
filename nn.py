@@ -62,7 +62,7 @@ def cnn(input, filter_sizes, num_filters, keep_ratio, scope, padding="VALID", re
 
     return logits
 
-def get_batches(data, batch_size, pad_idx, eos_idx, go_idx, hate, offensive, SGT):
+def get_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
     batches = []
     for idx in range(len(data) // batch_size + 1):
         if idx * batch_size !=  len(data):
@@ -70,11 +70,11 @@ def get_batches(data, batch_size, pad_idx, eos_idx, go_idx, hate, offensive, SGT
             hate_batch = hate[idx * batch_size: min((idx + 1) * batch_size, len(hate))]
             offensive_batch = offensive[idx * batch_size: min((idx + 1) * batch_size, len(offensive))]
 
-            data_info = batch_to_info(data_batch, hate_batch, offensive_batch, SGT, pad_idx, eos_idx, go_idx)
+            data_info = batch_to_info(data_batch, hate_batch, offensive_batch, SGT, pad_idx)
             batches.append(data_info)
     return batches
 
-def batch_to_info(batch, hate, offensive, SGT, pad_idx, eos_idx, go_idx):
+def batch_to_info(batch, hate, offensive, SGT, pad_idx):
     max_len = max(len(sent) for sent in batch)
     batch_info = list()
     for i, sent in enumerate(batch):
@@ -82,9 +82,9 @@ def batch_to_info(batch, hate, offensive, SGT, pad_idx, eos_idx, go_idx):
         sentence = {
             "enc_input": sent + padding,
             "length": len(sent),
-            "hate": hate[i],
-            "offensive": offensive[i],
-            "SGT": SGT[i]
+            "hate": hate[i] if hate else None,
+            "offensive": offensive[i] if offensive else None,
+            "SGT": SGT[i] if SGT else None
         }
         batch_info.append(sentence)
     return batch_info

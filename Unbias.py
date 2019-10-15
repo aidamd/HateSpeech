@@ -6,9 +6,8 @@ from plot import plot
 from sklearn.model_selection import train_test_split 
 
 class Unbias():
-    def __init__(self, params, data, vocab, hate, offensive, SGT):
+    def __init__(self, params, vocab):
         self.vocab = vocab
-        self.data = data
 
         self.params = params
         for key in params:
@@ -17,15 +16,6 @@ class Unbias():
                                          "/home/aida/Data/word_embeddings/GloVe/glove.6B.300d.txt",
                                          self.embedding_size)
         self.adversarial_build()
-        batches = get_batches(self.data,
-                              self.batch_size,
-                              vocab.index("<pad>"),
-                              vocab.index("<eos>"),
-                              vocab.index("<go>"),
-                              hate,
-                              offensive,
-                              SGT)
-        self.train(batches)
 
 
     def adversarial_build(self):
@@ -112,13 +102,16 @@ class Unbias():
     def feed_dict(self, batch, test=False):
         feed_dict = {
             self.encoder_input: [t["enc_input"] for t in batch],
-            self.hate_label: [t["hate"] for t in batch],
-            self.offensive_label: [t["offensive"] for t in batch],
             self.sequence_length: [t["length"] for t in batch],
-            self.SGT_label: [t["SGT"] for t in batch],
-            self.keep_prob: 1 if test else self.keep_ratio ,
+            self.keep_prob: 1 if test else self.keep_ratio,
             self.embedding_placeholder: self.embeddings
         }
+        if not test:
+            feed_dict = {
+                self.hate_label: [t["hate"] for t in batch],
+                self.offensive_label: [t["offensive"] for t in batch],
+                self.SGT_label: [t["SGT"] for t in batch]
+            }
         return feed_dict
 
     def train(self, batches):
@@ -209,4 +202,13 @@ class Unbias():
                     plot()
                     break
 
-
+    def predict_hate(self, batches):
+        saver = tf.train.Saver()
+        predicted_hate = list()
+        with tf.Session() as self.sess:
+            saver.restore(self.sess, "saved_model/model")
+            for batch in batches:
+                predicted_hate.extend(self.sess.run(
+                    [self.task["hate"]["predicted"]],
+                    feed_dict=self.feed_dict(batch)))
+        return predicted_hate
