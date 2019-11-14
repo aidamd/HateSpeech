@@ -68,10 +68,6 @@ class Unbias():
                                                 num_labels=2,
                                                 labels=self.offensive_label,
                                                 learning_rate=self.offensive_learning_rate),
-                     "hate": self.classify(self.representation,
-                                          num_labels=2,
-                                          labels=self.hate_label,
-                                          learning_rate=self.hate_learning_rate),
                      "SGT": self.classify(self.SGT,
                                          num_labels=self.num_SGT + 1,
                                          labels=self.SGT_label,
@@ -81,6 +77,30 @@ class Unbias():
                                              labels=self.SGT_label,
                                              learning_rate=self.SGT_off_learning_rate,
                                              maximize=True)}
+
+        #########################################################################
+        ###########################First Approach################################
+        #########################################################################
+        #self.task["hate"] = self.classify(self.representation,
+        #                                  num_labels=2,
+        #                                  labels=self.hate_label,
+        #                                  learning_rate=self.hate_learning_rate)
+
+
+        #########################################################################
+        ###########################Second Approach###############################
+        #########################################################################
+        print(self.num_SGT)
+        self.extended_offend = tf.tile(tf.expand_dims(
+            tf.cast(self.task["offensive"]["predicted"], tf.float32), 1),
+                                       [1, self.num_SGT + 1])
+        # maybe add sigmoid
+        self.hate = tf.multiply(self.extended_offend, self.task["SGT"]["logits"])
+
+        self.task["hate"] = self.classify(self.hate,
+                                          num_labels=2,
+                                          labels=self.hate_label,
+                                          learning_rate=self.hate_learning_rate)
 
     def classify(self, latent, num_labels, labels, learning_rate, maximize=False):
         task = dict()
@@ -99,15 +119,14 @@ class Unbias():
 
         return task
 
-    def feed_dict(self, batch, test=False):
-        print(self.embeddings.shape)
+    def feed_dict(self, batch, test=False, predict=False):
         feed_dict = {
             self.encoder_input: [t["enc_input"] for t in batch],
             self.sequence_length: [t["length"] for t in batch],
             self.keep_prob: 1 if test else self.keep_ratio,
             self.embedding_placeholder: self.embeddings
         }
-        if not test:
+        if not predict:
             feed_dict[self.hate_label] = [t["hate"] for t in batch]
             feed_dict[self.offensive_label] = [t["offensive"] for t in batch]
             feed_dict[self.SGT_label] = [t["SGT"] for t in batch]
@@ -165,7 +184,7 @@ class Unbias():
                 for batch in test_batches:
                     sgt_a_test, off_a_test, hate_a_test = self.sess.run(
                         [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],
-                         self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch, True))
+                         self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch, test=True))
 
                     sgt_acc_test += sgt_a_test
                     hate_acc_test += hate_a_test
@@ -209,5 +228,5 @@ class Unbias():
             for batch in batches:
                 predicted_hate.extend(list(self.sess.run(
                     self.task["hate"]["predicted"],
-                    feed_dict=self.feed_dict(batch, True))))
+                    feed_dict=self.feed_dict(batch, True, True))))
         return predicted_hate
