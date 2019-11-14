@@ -9,6 +9,7 @@ def plot():
         plt.figure()
         plt.plot(x, losses["test"], color = "red")
         plt.plot(x, losses["train"], color = "blue")
+        plt.legend()
         plt.savefig("plots/" + a)
 
     plt.figure()
@@ -16,7 +17,8 @@ def plot():
     x = np.linspace(0, losses.shape[0], losses.shape[0])
     plt.plot(x, losses["SGT"], color="red")
     plt.plot(x, losses["offensive"], color="blue")
-    plt.plot(x, losses["hate"], color="purple")
+    plt.plot(x, losses["hate"], color="#DAA520")
+    plt.legend()
     plt.savefig("plots/losses")
 
 
