@@ -5,23 +5,40 @@ import os
 from nn import *
 
 class Bias():
-    def __init__(self, data_path, model_path=False):
+    def __init__(self, data_path, model_path=False, test_data_path=None):
         self.model_path = model_path
         data = self.initialize_dataset(data_path)
-        model = RNN("hate ~ seq(text)", data=data, learning_rate=0.0005, rnn_dropout=0.8)
+        model = RNN("hate ~ seq(text)", data=data, learning_rate=0.001, rnn_dropout=0.8)
+        vocabs = data.vocab
 
         if not os.path.exists(model_path + ".meta"):
-            #results = model.CV(data, num_epochs=15, num_folds=10, batch_size=512)
-            #results.summary()
+            results = model.CV(data, num_epochs=10, num_folds=10, batch_size=512)
+            results.summary()
+
+            """
+            test_data = self.initialize_dataset(test_data_path)
+            y = model.predict(test_data, indices=test_idx.tolist(),
+                             model_path=model_path)
+            labels = dict()
+            num_classes = dict()
+            for key in y:
+                var_name = key.replace("prediction-", "")
+                test_y, card = data.get_labels(idx=test_idx, var=var_name)
+                labels[key] = test_y
+                num_classes[key] = card
+            stats = self.evaluate(y, labels, num_classes)  # both dict objects
+            results.append(stats)
+            CV_Results(results)
+            """
             model.train(data, num_epochs=15, batch_size=512, model_path=model_path)
 
-        fake_data_path = self.generate_fake(data_path)
+        fake_data_path = self.generate_fake(data_path, vocabs)
         fake_data = self.initialize_dataset(fake_data_path)
 
         predictions = model.predict(fake_data, orig_data=data, model_path=model_path,
                                     column="text")
         fake_data.data["predicted_hate"] = predictions["prediction-hate"]
-        fake_data.data.to_csv("predictions.csv", index=False)
+        fake_data.data.to_csv("biased/predictions.csv", index=False)
 
     def initialize_dataset(self, data_dir):
         data = Dataset(data_dir)
@@ -31,18 +48,21 @@ class Bias():
         data.clean("text")
         return data
 
-    def generate_fake(self, data_path):
+    def generate_fake(self, data_path, vocabs):
         source_df = pd.read_csv(data_path)
         print(source_df.shape[0], "datapoints")
 
         source_df = tokenize_data(source_df, "text")
         source_df = remove_empty(source_df, "text")
         print(source_df.shape[0], "datapoints after removing empty strings")
-        return self.expand(source_df, "SGT.txt")
+        fake = self.expand(source_df, "SGT.txt", vocabs)
+        fake_path = os.path.split(data_path)[0] + "/fake_gab.csv"
+        fake.to_csv(fake_path)
+        return fake_path
 
-
-    def expand(self, corpus, SGT_path):
+    def expand(self, corpus, SGT_path, vocabs):
         SGTs = [tok.replace("\n", "") for tok in open(SGT_path, "r").readlines()]
+        SGTs = [tok for tok in SGTs if tok in vocabs]
         fake_df = {"text": list(),
                    "hate": list(),
                    "sample": list(),
@@ -60,5 +80,4 @@ class Bias():
                         fake_df["SGT"].extend([t for t in SGTs])
                         fake_df["origin_SGT"].extend([s for t in SGTs])
 
-        pd.DataFrame.from_dict(fake_df).to_csv("Data/fake_gab.csv")
-        return "Data/fake_gab.csv"
+        return pd.DataFrame.from_dict(fake_df)

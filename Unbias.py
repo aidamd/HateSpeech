@@ -161,24 +161,37 @@ class Unbias():
                 train_batches = [batches[i] for i in train_idx]
                 test_batches = [batches[i] for i in test_idx]
                 for batch in train_batches:
-                    _, _, _, _, sgt_l, off_l, hate_l, sgt_off_l = self.sess.run(
-                        [self.task["SGT"]["step"], self.task["hate"]["step"],
-                         self.task["offensive"]["step"], self.task["SGT_off"]["step"],
-                         self.task["SGT"]["loss"], self.task["offensive"]["loss"],
-                         self.task["hate"]["loss"], self.task["SGT_off"]["loss"]],
-                        feed_dict=self.feed_dict(batch))
+                    if epoch < 30:
+                        _, _, _, sgt_l, off_l, sgt_off_l = self.sess.run(
+                            [self.task["SGT"]["step"], self.task["offensive"]["step"],
+                             self.task["SGT_off"]["step"], self.task["SGT"]["loss"],
+                             self.task["offensive"]["loss"], self.task["SGT_off"]["loss"]],
+                            feed_dict=self.feed_dict(batch))
+
+                        sgt_a, off_a = self.sess.run(
+                            [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],],
+                            feed_dict=self.feed_dict(batch))
+
+
+                    else:
+                        _, _, _, _, sgt_l, off_l, hate_l, sgt_off_l = self.sess.run(
+                            [self.task["SGT"]["step"], self.task["hate"]["step"],
+                             self.task["offensive"]["step"], self.task["SGT_off"]["step"],
+                             self.task["SGT"]["loss"], self.task["offensive"]["loss"],
+                             self.task["hate"]["loss"], self.task["SGT_off"]["loss"]],
+                            feed_dict=self.feed_dict(batch))
+                        hate_loss += hate_l
+
+                        sgt_a, off_a, hate_a = self.sess.run(
+                            [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],
+                             self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch))
+                        hate_acc += hate_a
 
                     sgt_loss += sgt_l
-                    hate_loss += hate_l
                     off_loss += off_l
                     sgt_off_loss += sgt_off_l
 
-                    sgt_a, off_a, hate_a = self.sess.run(
-                        [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],
-                         self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch))
-
                     sgt_acc += sgt_a
-                    hate_acc += hate_a
                     off_acc += off_a
 
                 for batch in test_batches:
@@ -190,11 +203,14 @@ class Unbias():
                     hate_acc_test += hate_a_test
                     off_acc_test += off_a_test
 
-                print("Iterations: %d\n Hate loss: %.4f"
-                      "\n Offensive loss: %.4f\n SGT loss: %.4f\n "
-                      "SGT off loss: %.4f" %
-                      (epoch, off_loss / len(batches), hate_loss / len(batches),
-                       sgt_loss / len(batches), sgt_off_loss / len(batches)))
+                print("Iterations: %d\n Hate: loss: %.4f, train: %.4f, test: %.4f"
+                        "\n Offensive: loss: %.4f, train: %.4f, test: %.4f \n SGT: loss: %.4f,"
+                        "train: %.4f, test: %.4f \n" %
+                      (epoch, hate_loss / len(train_batches), hate_acc / len(train_batches), 
+                          hate_acc_test / len(test_batches), off_loss / len(train_batches),
+                          off_acc / len(train_batches), off_acc_test / len(test_batches),
+                          sgt_loss / len(train_batches), sgt_acc / len(train_batches), 
+                          sgt_acc_test / len(test_batches))
 
                 losses["SGT"].append(sgt_loss / len(train_batches))
                 losses["hate"].append(hate_loss / len(train_batches))
@@ -212,7 +228,7 @@ class Unbias():
                 epoch += 1
 
                 if epoch == self.epochs:
-                    saver.save(self.sess, "saved_model/model")
+                    saver.save(self.sess, "saved_model/adversary/hate")
                     pd.DataFrame.from_dict(losses).to_csv("plots/losses.csv")
                     pd.DataFrame.from_dict(SGT_accuracy).to_csv("plots/SGT.csv")
                     pd.DataFrame.from_dict(hate_accuracy).to_csv("plots/hate.csv")
@@ -224,7 +240,7 @@ class Unbias():
         saver = tf.train.Saver()
         predicted_hate = list()
         with tf.Session() as self.sess:
-            saver.restore(self.sess, "saved_model/model")
+            saver.restore(self.sess, "saved_model/adversary/hate")
             for batch in batches:
                 predicted_hate.extend(list(self.sess.run(
                     self.task["hate"]["predicted"],

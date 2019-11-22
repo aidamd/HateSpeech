@@ -20,7 +20,7 @@ def check_bias(source_df, params):
 
     model = Unbias(params, vocab)
 
-    fake_df = pd.read_csv("Data/fake_gab.csv")
+    fake_df = pd.read_csv("Data/24k/fake_gab.csv")
     fake_df = tokenize_data(fake_df, "text")
     fake_df = remove_empty(fake_df, "text")
     print(fake_df.shape[0], "datapoints in fake data")
@@ -34,7 +34,7 @@ def check_bias(source_df, params):
     predictions = model.predict_hate(batches)
 
     fake_df["predicted_hate"] = predictions
-    fake_df.to_csv("unbiased_predictions.csv", index=False)
+    fake_df.to_csv("unbiased/predictions.csv", index=False)
 
 
 if __name__ == '__main__':

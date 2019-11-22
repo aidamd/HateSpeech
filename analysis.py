@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     fake = pd.read_csv(args.data + "/predictions.csv")
 
-    orig = pd.read_csv("Data/gab.csv")
+    orig = pd.read_csv("Data/24k/gab.csv")
     samples = set(fake["sample"].tolist())
 
     # the changes that changes a non hate text to hate
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     for s in samples:
         subset = fake.loc[fake["sample"] == s]
         if len(set(subset["predicted_hate"])) > 1:
-            print("original text = " + orig.iloc[s, 3])
+            print("original text = " + orig.iloc[s, 4])
             print("original label = " + "Hate" if orig.iloc[s, 1] == 1 else "Not Hate")
             for i, row in subset.iterrows():
                 if row["predicted_hate"] != orig.iloc[s, 1]:
