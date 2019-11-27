@@ -12,8 +12,8 @@ class Bias():
         vocabs = data.vocab
 
         if not os.path.exists(model_path + ".meta"):
-            results = model.CV(data, num_epochs=10, num_folds=10, batch_size=512)
-            results.summary()
+            #results = model.CV(data, num_epochs=10, num_folds=10, batch_size=512)
+            #results.summary()
 
             """
             test_data = self.initialize_dataset(test_data_path)
@@ -30,7 +30,7 @@ class Bias():
             results.append(stats)
             CV_Results(results)
             """
-            model.train(data, num_epochs=15, batch_size=512, model_path=model_path)
+            model.train(data, num_epochs=10, batch_size=512, model_path=model_path)
 
         fake_data_path = self.generate_fake(data_path, vocabs)
         fake_data = self.initialize_dataset(fake_data_path)

@@ -3,11 +3,11 @@ import pandas as pd
 from Unbias import Unbias
 from nn import *
 import argparse
-import pickle
 
 
 
-def check_bias(source_df, params):
+
+def check_bias(source_df, test_df, params):
     print(source_df.shape[0], "datapoints")
     source_df = tokenize_data(source_df, "text")
     source_df = remove_empty(source_df, "text")
@@ -31,7 +31,7 @@ def check_bias(source_df, params):
                           params["batch_size"],
                           vocab.index("<pad>"))
 
-    predictions = model.predict_hate(batches)
+    predictions = model.predict_hate(batches, ["hate"])["hate"]
 
     fake_df["predicted_hate"] = predictions
     fake_df.to_csv("unbiased/predictions.csv", index=False)
@@ -43,12 +43,10 @@ if __name__ == '__main__':
     parser.add_argument("--params", help="Parameter files. should be a json file")
 
     args = parser.parse_args()
-    if args.data.endswith('.tsv'):
-        data = pd.read_csv(args.data, sep='\t', quoting=3)
-    elif args.data.endswith('.csv'):
-        data = pd.read_csv(args.data)
-    elif args.data.endswith('.pkl'):
-        data = pickle.load(open(args.data, 'rb'))
+
+    data = pd.read_csv(args.data)
+    test_data = pd.read_csv(args.test)
+
 
     try:
         with open(args.params, 'r') as fo:
@@ -56,5 +54,5 @@ if __name__ == '__main__':
     except Exception:
         print("Wrong params file")
         exit(1)
-    check_bias(data, params)
+    check_bias(data, test_data, params)
 

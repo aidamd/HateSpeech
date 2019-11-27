@@ -101,6 +101,8 @@ class Unbias():
                                           num_labels=2,
                                           labels=self.hate_label,
                                           learning_rate=self.hate_learning_rate)
+        self.loss = self.task["hate"]["loss"] + self.task["SGT"]["loss"] + self.task["offensive"]["loss"]
+        self.step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate).minimize(self.loss)
 
     def classify(self, latent, num_labels, labels, learning_rate, maximize=False):
         task = dict()
@@ -161,7 +163,7 @@ class Unbias():
                 train_batches = [batches[i] for i in train_idx]
                 test_batches = [batches[i] for i in test_idx]
                 for batch in train_batches:
-                    if epoch < 30:
+                    if epoch < 0:
                         _, _, _, sgt_l, off_l, sgt_off_l = self.sess.run(
                             [self.task["SGT"]["step"], self.task["offensive"]["step"],
                              self.task["SGT_off"]["step"], self.task["SGT"]["loss"],
@@ -174,10 +176,11 @@ class Unbias():
 
 
                     else:
-                        _, _, _, _, sgt_l, off_l, hate_l, sgt_off_l = self.sess.run(
-                            [self.task["SGT"]["step"], self.task["hate"]["step"],
-                             self.task["offensive"]["step"], self.task["SGT_off"]["step"],
-                             self.task["SGT"]["loss"], self.task["offensive"]["loss"],
+                        _, _, sgt_l, off_l, hate_l, sgt_off_l = self.sess.run(
+                            [#self.task["SGT"]["step"], self.task["hate"]["step"],
+                             #self.task["offensive"]["step"], 
+                             self.task["SGT_off"]["step"], self.step,
+                             self.loss, self.task["offensive"]["loss"],
                              self.task["hate"]["loss"], self.task["SGT_off"]["loss"]],
                             feed_dict=self.feed_dict(batch))
                         hate_loss += hate_l
@@ -202,7 +205,7 @@ class Unbias():
                     sgt_acc_test += sgt_a_test
                     hate_acc_test += hate_a_test
                     off_acc_test += off_a_test
-
+                """
                 print("Iterations: %d\n Hate: loss: %.4f, train: %.4f, test: %.4f"
                         "\n Offensive: loss: %.4f, train: %.4f, test: %.4f \n SGT: loss: %.4f,"
                         "train: %.4f, test: %.4f \n" %
@@ -210,8 +213,9 @@ class Unbias():
                           hate_acc_test / len(test_batches), off_loss / len(train_batches),
                           off_acc / len(train_batches), off_acc_test / len(test_batches),
                           sgt_loss / len(train_batches), sgt_acc / len(train_batches), 
-                          sgt_acc_test / len(test_batches))
-
+                          sgt_acc_test / len(test_batches)))
+                """
+                print(sgt_loss / len(train_batches))
                 losses["SGT"].append(sgt_loss / len(train_batches))
                 losses["hate"].append(hate_loss / len(train_batches))
                 losses["offensive"].append(off_loss / len(train_batches))
@@ -236,13 +240,14 @@ class Unbias():
                     plot()
                     break
 
-    def predict_hate(self, batches):
+    def predict_hate(self, batches, labels):
         saver = tf.train.Saver()
-        predicted_hate = list()
+        predicted = {label: list() for label in labels}
         with tf.Session() as self.sess:
             saver.restore(self.sess, "saved_model/adversary/hate")
             for batch in batches:
-                predicted_hate.extend(list(self.sess.run(
-                    self.task["hate"]["predicted"],
-                    feed_dict=self.feed_dict(batch, True, True))))
-        return predicted_hate
+                for label in labels:
+                    predicted[label].extend(list(self.sess.run(
+                        self.task[label]["predicted"],
+                        feed_dict=self.feed_dict(batch, True, True))))
+        return predicted

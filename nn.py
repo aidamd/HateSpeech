@@ -74,6 +74,27 @@ def get_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
             batches.append(data_info)
     return batches
 
+def get_balanced_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
+    batches = list()
+    for sub_idx in balanced_batch_indices(len(data), batch_size, hate):
+        data_batch = [data[i] for i in sub_idx]
+        hate_batch = [hate[i] for i in sub_idx] if hate else None
+        offensive_batch = [offensive[i] for i in sub_idx] if hate else None
+
+        data_info = batch_to_info(data_batch, hate_batch, offensive_batch, SGT, pad_idx)
+        batches.append(data_info)
+    return batches
+
+def balanced_batch_indices(size, batch_size, hate):
+    # produce iterable of (start, end) batch indices
+    for i in range(0, size, batch_size):
+        true_idx = np.random.choice(np.where(np.array(hate) == 1)[0], int(batch_size * .1))
+        false_idx = np.random.choice(np.where(np.array(hate) == 0)[0], int(batch_size * .9))
+        sub_idx = np.concatenate((true_idx, false_idx), axis=0)
+        np.random.shuffle(sub_idx)
+        yield sub_idx
+
+
 def batch_to_info(batch, hate, offensive, SGT, pad_idx):
     max_len = max(len(sent) for sent in batch)
     batch_info = list()
