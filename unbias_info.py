@@ -3,11 +3,11 @@ import pandas as pd
 from Unbias import Unbias
 from nn import *
 import argparse
+from collections import Counter
 
 
 
-
-def check_bias(source_df, test_df, params):
+def check_bias(source_df, params):
     print(source_df.shape[0], "datapoints")
     source_df = tokenize_data(source_df, "text")
     source_df = remove_empty(source_df, "text")
@@ -17,8 +17,11 @@ def check_bias(source_df, test_df, params):
     df_tokens, SGT, count = tokens_to_ids(df_text, vocab, params["SGT_path"])
     # SGT, count = extract_SGT(df_tokens, vocab, params["SGT_path"])
     params["num_SGT"] = count
+    unique = list(set(SGT))
+    unique.sort()
+    SGT_weights = [1 - (Counter(SGT)[i] / len(SGT)) for i in unique]
 
-    model = Unbias(params, vocab)
+    model = Unbias(params, vocab, SGT_weights)
 
     fake_df = pd.read_csv("Data/24k/fake_gab.csv")
     fake_df = tokenize_data(fake_df, "text")
@@ -29,7 +32,8 @@ def check_bias(source_df, test_df, params):
 
     batches = get_batches(fake_tokens,
                           params["batch_size"],
-                          vocab.index("<pad>"))
+                          vocab.index("<pad>"),
+                          SGT=SGT)
 
     predictions = model.predict_hate(batches, ["hate"])["hate"]
 
@@ -45,8 +49,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     data = pd.read_csv(args.data)
-    test_data = pd.read_csv(args.test)
-
 
     try:
         with open(args.params, 'r') as fo:
@@ -54,5 +56,5 @@ if __name__ == '__main__':
     except Exception:
         print("Wrong params file")
         exit(1)
-    check_bias(data, test_data, params)
+    check_bias(data, params)
 

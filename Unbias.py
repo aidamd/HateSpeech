@@ -6,7 +6,7 @@ from plot import plot
 from sklearn.model_selection import train_test_split 
 
 class Unbias():
-    def __init__(self, params, vocab):
+    def __init__(self, params, vocab, SGT_weights):
         self.vocab = vocab
 
         self.params = params
@@ -16,6 +16,7 @@ class Unbias():
                                          "/home/aida/Data/word_embeddings/GloVe/glove.6B.300d.txt",
                                          self.embedding_size)
         self.adversarial_build()
+        self.weights = SGT_weights
 
 
     def adversarial_build(self):
@@ -30,6 +31,8 @@ class Unbias():
         self.offensive_label = tf.placeholder(tf.int64, [None], name="offensive_labels")
         self.hate_label = tf.placeholder(tf.int64, [None], name="hate_labels")
         self.SGT_label = tf.placeholder(tf.int64, [None], name="SGT_labels")
+        self.SGT_onehot = tf.placeholder(tf.float32, [None, self.num_SGT + 1], name="SGT_onehot")
+        self.SGT_weights = tf.placeholder(tf.float32, [None], name="SGT_weights")
 
         emb_W = tf.Variable(tf.constant(0.0,
                                         shape=[len(self.vocab), self.embedding_size]),
@@ -57,9 +60,9 @@ class Unbias():
         shape = tf.shape(self.encoder_input)
 
         self.offensive_size = self.hidden_size - self.SGT_size
-        self.SGT = tf.slice(self.representation,
-                            begin=[0, self.offensive_size] ,
-                            size=[shape[0], self.SGT_size])
+        #self.SGT = tf.slice(self.representation,
+        #                    begin=[0, self.offensive_size] ,
+        #                    size=[shape[0], self.SGT_size])
         self.offensive = tf.slice(self.representation,
                             begin=[0, 0],
                             size=[shape[0], self.offensive_size])
@@ -68,48 +71,35 @@ class Unbias():
                                                 num_labels=2,
                                                 labels=self.offensive_label,
                                                 learning_rate=self.offensive_learning_rate),
-                     "SGT": self.classify(self.SGT,
-                                         num_labels=self.num_SGT + 1,
-                                         labels=self.SGT_label,
-                                         learning_rate=self.SGT_learning_rate),
                      "SGT_off": self.classify(self.offensive,
                                              num_labels=self.num_SGT + 1,
                                              labels=self.SGT_label,
-                                             learning_rate=self.SGT_off_learning_rate,
-                                             maximize=True)}
+                                             learning_rate=self.SGT_off_learning_rate)}
 
-        #########################################################################
-        ###########################First Approach################################
-        #########################################################################
-        #self.task["hate"] = self.classify(self.representation,
-        #                                  num_labels=2,
-        #                                  labels=self.hate_label,
-        #                                  learning_rate=self.hate_learning_rate)
-
-
-        #########################################################################
-        ###########################Second Approach###############################
-        #########################################################################
         print(self.num_SGT)
         self.extended_offend = tf.tile(tf.expand_dims(
             tf.cast(self.task["offensive"]["predicted"], tf.float32), 1),
-                                       [1, self.num_SGT + 1])
-        # maybe add sigmoid
-        self.hate = tf.multiply(self.extended_offend, self.task["SGT"]["logits"])
+                                       [1, self.SGT_size])
 
+        #self.hate = tf.multiply(self.extended_offend, self.task["SGT"]["logits"])
+        self.SGT = tf.multiply(self.extended_offend, tf.layers.dense(self.SGT_onehot, self.SGT_size,
+                                                               activation=tf.nn.sigmoid))
+        self.hate = tf.concat([self.offensive, self.SGT], axis=-1)
         self.task["hate"] = self.classify(self.hate,
                                           num_labels=2,
                                           labels=self.hate_label,
                                           learning_rate=self.hate_learning_rate)
-        self.loss = self.task["hate"]["loss"] + self.task["SGT"]["loss"] + self.task["offensive"]["loss"]
-        self.step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate).minimize(self.loss)
+        self.loss = self.task["offensive"]["loss"] + self.task["hate"]["loss"] - 0.1 * self.task["SGT_off"]["loss"]
+        self.step = tf.train.GradientDescentOptimizer(learning_rate=self.hate_learning_rate).minimize(self.loss)
 
-    def classify(self, latent, num_labels, labels, learning_rate, maximize=False):
+    def classify(self, latent, num_labels, labels, learning_rate, maximize=False, weights=None):
         task = dict()
         task["logits"] = tf.layers.dense(latent, num_labels)
+        if weights:
+            logit_weights = tf.gather(weights, labels)
         task["xentropy"] = tf.losses.sparse_softmax_cross_entropy(
             labels=tf.cast(labels, tf.int32),
-            logits=task["logits"])
+            logits=task["logits"], weights=logit_weights if weights else 1.0)
 
         task["loss"] = tf.reduce_mean(task["xentropy"])
         task["step"] = tf.train.AdamOptimizer(learning_rate=learning_rate)\
@@ -126,12 +116,17 @@ class Unbias():
             self.encoder_input: [t["enc_input"] for t in batch],
             self.sequence_length: [t["length"] for t in batch],
             self.keep_prob: 1 if test else self.keep_ratio,
-            self.embedding_placeholder: self.embeddings
-        }
+            self.embedding_placeholder: self.embeddings,
+            self.SGT_weights: self.weights,
+            self.SGT_onehot: [[0 for i in range(self.num_SGT + 1)] for t in batch]
+            }
+        for i, t in enumerate(batch):
+            feed_dict[self.SGT_onehot][i][t["SGT"]] = 1
         if not predict:
             feed_dict[self.hate_label] = [t["hate"] for t in batch]
             feed_dict[self.offensive_label] = [t["offensive"] for t in batch]
             feed_dict[self.SGT_label] = [t["SGT"] for t in batch]
+
         return feed_dict
 
     def train(self, batches):
@@ -143,7 +138,8 @@ class Unbias():
             losses = {"offensive": list(),
                       "hate": list(),
                       "SGT": list(),
-                      "SGT_off": list()}
+                      "SGT_off": list(),
+                      "task": list()}
 
             hate_accuracy = {"train": list(),
                              "test": list()}
@@ -153,56 +149,40 @@ class Unbias():
                             "test": list(),}
 
             while True:
-                off_loss, hate_loss, sgt_loss, sgt_off_loss = 0, 0, 0, 0
+                off_loss, hate_loss, sgt_loss, sgt_off_loss, task_loss = 0, 0, 0, 0, 0
                 off_acc, hate_acc, sgt_acc = 0, 0 ,0
                 off_acc_test, hate_acc_test, sgt_acc_test = 0, 0 ,0
-
-                #_ = self.sess.run(self.embedding_init,
-                #                  feed_dict = {self.embedding_placeholder: self.embeddings})
                 train_idx, test_idx = train_test_split(np.arange(len(batches)), test_size=0.2, shuffle=True)
                 train_batches = [batches[i] for i in train_idx]
                 test_batches = [batches[i] for i in test_idx]
                 for batch in train_batches:
-                    if epoch < 0:
-                        _, _, _, sgt_l, off_l, sgt_off_l = self.sess.run(
-                            [self.task["SGT"]["step"], self.task["offensive"]["step"],
-                             self.task["SGT_off"]["step"], self.task["SGT"]["loss"],
-                             self.task["offensive"]["loss"], self.task["SGT_off"]["loss"]],
+                    if epoch % 2 == 0:
+                        _, sgt_off_l = self.sess.run(
+                            [self.task["SGT_off"]["step"], self.task["SGT_off"]["loss"]],
                             feed_dict=self.feed_dict(batch))
-
-                        sgt_a, off_a = self.sess.run(
-                            [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],],
-                            feed_dict=self.feed_dict(batch))
-
+                        sgt_off_loss += sgt_off_l
 
                     else:
-                        _, _, sgt_l, off_l, hate_l, sgt_off_l = self.sess.run(
-                            [#self.task["SGT"]["step"], self.task["hate"]["step"],
-                             #self.task["offensive"]["step"], 
-                             self.task["SGT_off"]["step"], self.step,
-                             self.loss, self.task["offensive"]["loss"],
-                             self.task["hate"]["loss"], self.task["SGT_off"]["loss"]],
+                        _, task_l, off_l, hate_l = self.sess.run(
+                            [self.step, self.loss, self.task["offensive"]["loss"],
+                             self.task["hate"]["loss"]],
                             feed_dict=self.feed_dict(batch))
                         hate_loss += hate_l
+                        task_loss += task_l
+                        off_loss += off_l
 
-                        sgt_a, off_a, hate_a = self.sess.run(
-                            [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],
+                        off_a, hate_a = self.sess.run(
+                            [self.task["offensive"]["accuracy"],
                              self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch))
                         hate_acc += hate_a
+                        off_acc += off_a
 
-                    sgt_loss += sgt_l
-                    off_loss += off_l
-                    sgt_off_loss += sgt_off_l
-
-                    sgt_acc += sgt_a
-                    off_acc += off_a
 
                 for batch in test_batches:
-                    sgt_a_test, off_a_test, hate_a_test = self.sess.run(
-                        [self.task["SGT"]["accuracy"], self.task["offensive"]["accuracy"],
+                    off_a_test, hate_a_test = self.sess.run(
+                        [self.task["offensive"]["accuracy"],
                          self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch, test=True))
 
-                    sgt_acc_test += sgt_a_test
                     hate_acc_test += hate_a_test
                     off_acc_test += off_a_test
                 """
@@ -215,26 +195,39 @@ class Unbias():
                           sgt_loss / len(train_batches), sgt_acc / len(train_batches), 
                           sgt_acc_test / len(test_batches)))
                 """
-                print(sgt_loss / len(train_batches))
-                losses["SGT"].append(sgt_loss / len(train_batches))
-                losses["hate"].append(hate_loss / len(train_batches))
-                losses["offensive"].append(off_loss / len(train_batches))
-                losses["SGT_off"].append(sgt_off_loss / len(train_batches))
+                if epoch % 2 == 0:
+                    print("Epoch: %d, Adversarial loss: %.4f" %
+                          (epoch, sgt_off_loss / len(train_batches)))
+                    losses["SGT_off"].append(sgt_off_loss / len(train_batches))
+                else:
+                    print("Epoch: %d, Task loss: %.4f, Hate loss: %.4f, Offensive loss: %.4f" %
+                          (epoch, task_loss / len(train_batches),
+                           hate_loss / len(train_batches), off_loss / len(train_batches)))
+                    losses["hate"].append(hate_loss / len(train_batches))
+                    losses["offensive"].append(off_loss / len(train_batches))
+                    losses["task"].append(task_loss / len(train_batches))
 
-                SGT_accuracy["train"].append(sgt_acc / len(train_batches))
-                hate_accuracy["train"].append(hate_acc / len(train_batches))
-                offensive_accuracy["train"].append(off_acc / len(train_batches))
+                #losses["SGT"].append(sgt_loss / len(train_batches))
+                #losses["hate"].append(hate_loss / len(train_batches))
+                #losses["offensive"].append(off_loss / len(train_batches))
+                #losses["SGT_off"].append(sgt_off_loss / len(train_batches))
+                #losses["task"].append(task_loss / len(train_batches))
 
-                SGT_accuracy["test"].append(sgt_acc_test / len(test_batches))
-                hate_accuracy["test"].append(hate_acc_test / len(test_batches))
-                offensive_accuracy["test"].append(off_acc_test / len(test_batches))
+                #SGT_accuracy["train"].append(sgt_acc / len(train_batches))
+                if epoch % 2 != 0:
+                    hate_accuracy["train"].append(hate_acc / len(train_batches))
+                    offensive_accuracy["train"].append(off_acc / len(train_batches))
+
+                #SGT_accuracy["test"].append(sgt_acc_test / len(test_batches))
+                    hate_accuracy["test"].append(hate_acc_test / len(test_batches))
+                    offensive_accuracy["test"].append(off_acc_test / len(test_batches))
 
                 epoch += 1
 
                 if epoch == self.epochs:
                     saver.save(self.sess, "saved_model/adversary/hate")
-                    pd.DataFrame.from_dict(losses).to_csv("plots/losses.csv")
-                    pd.DataFrame.from_dict(SGT_accuracy).to_csv("plots/SGT.csv")
+                    #pd.DataFrame.from_dict(losses).to_csv("plots/losses.csv")
+                    #pd.DataFrame.from_dict(SGT_accuracy).to_csv("plots/SGT.csv")
                     pd.DataFrame.from_dict(hate_accuracy).to_csv("plots/hate.csv")
                     pd.DataFrame.from_dict(offensive_accuracy).to_csv("plots/offensive.csv")
                     plot()

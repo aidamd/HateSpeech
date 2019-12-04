@@ -55,7 +55,7 @@ class Bias():
         source_df = tokenize_data(source_df, "text")
         source_df = remove_empty(source_df, "text")
         print(source_df.shape[0], "datapoints after removing empty strings")
-        fake = self.expand(source_df, "SGT.txt", vocabs)
+        fake = self.expand(source_df, "extended_SGT.txt", vocabs)
         fake_path = os.path.split(data_path)[0] + "/fake_gab.csv"
         fake.to_csv(fake_path)
         return fake_path

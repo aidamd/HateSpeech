@@ -18,14 +18,18 @@ def oversample(source_df, test_df, params):
     df_tokens, SGT, count = tokens_to_ids(df_text, vocab, params["SGT_path"])
     # SGT, count = extract_SGT(df_tokens, vocab, params["SGT_path"])
     params["num_SGT"] = count
+    print(count, "unique SGTs")
+    unique = list(set(SGT))
+    unique.sort()
+    SGT_weights = [1 - (Counter(SGT)[i] / len(SGT)) for i in unique]
 
-    model = Unbias(params, vocab)
+    model = Unbias(params, vocab, SGT_weights)
     batches = get_balanced_batches(df_tokens,
                           model.batch_size,
                           vocab.index("<pad>"),
                           source_df["hate"].tolist(),
                           source_df["offensive"].tolist(),
-                          SGT)
+                          SGT=SGT)
     model.train(batches)
     test_df = tokenize_data(test_df, "text")
     test_df = remove_empty(test_df, "text")
@@ -36,9 +40,10 @@ def oversample(source_df, test_df, params):
     test_tokens, SGT, count = tokens_to_ids(test_text, vocab, params["SGT_path"])
     batches = get_batches(test_tokens,
                           params["batch_size"],
-                          vocab.index("<pad>"))
+                          vocab.index("<pad>"),
+                          SGT=SGT)
 
-    test_predictions = model.predict_hate(batches, ["hate", "SGT", "offensive"])
+    test_predictions = model.predict_hate(batches, ["hate", "offensive"])
     print("Hate: F1 score:", f1_score(test_hate, test_predictions["hate"]),
           ", Precision:", precision_score(test_hate, test_predictions["hate"]),
           ", Recall:", recall_score(test_hate, test_predictions["hate"])
@@ -51,12 +56,12 @@ def oversample(source_df, test_df, params):
           )
     print(Counter(test_offensive))
     print(Counter(test_predictions["offensive"]))
-    print("SGT: F1 score:", f1_score(SGT, test_predictions["SGT"], average="macro"),
-          ", Precision:", precision_score(SGT, test_predictions["SGT"], average="macro"),
-          ", Recall:", recall_score(SGT, test_predictions["SGT"], average="macro")
-          )
-    print(Counter(SGT))
-    print(Counter(test_predictions["SGT"]))
+    #print("SGT: F1 score:", f1_score(SGT, test_predictions["SGT"], average="macro"),
+    #      ", Precision:", precision_score(SGT, test_predictions["SGT"], average="macro"),
+    #      ", Recall:", recall_score(SGT, test_predictions["SGT"], average="macro")
+    #      )
+    #print(Counter(SGT))
+    #print(Counter(test_predictions["SGT"]))
 
 
 if __name__ == '__main__':

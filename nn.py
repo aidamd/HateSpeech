@@ -68,7 +68,8 @@ def get_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
         if idx * batch_size !=  len(data):
             data_batch = data[idx * batch_size: min((idx + 1) * batch_size, len(data))]
             hate_batch = hate[idx * batch_size: min((idx + 1) * batch_size, len(hate))] if hate else None
-            offensive_batch = offensive[idx * batch_size: min((idx + 1) * batch_size, len(offensive))] if hate else None
+            offensive_batch = offensive[idx * batch_size: min((idx + 1) * batch_size, len(offensive))] \
+                if hate else None
 
             data_info = batch_to_info(data_batch, hate_batch, offensive_batch, SGT, pad_idx)
             batches.append(data_info)
