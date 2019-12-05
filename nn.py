@@ -81,6 +81,7 @@ def get_balanced_batches(data, batch_size, pad_idx, hate=None, offensive=None, S
         data_batch = [data[i] for i in sub_idx]
         hate_batch = [hate[i] for i in sub_idx] if hate else None
         offensive_batch = [offensive[i] for i in sub_idx] if hate else None
+        SGT_batch = [SGT[i] for i in sub_idx] if hate else None
 
         data_info = batch_to_info(data_batch, hate_batch, offensive_batch, SGT, pad_idx)
         batches.append(data_info)
@@ -116,23 +117,27 @@ def tokenize_data(corpus, col):
     for idx, row in corpus.iterrows():
         corpus.at[idx, col] = nltk_token.WordPunctTokenizer().tokenize(clean(row[col]))
     return corpus
-
+"""
 def extract_SGT(df_tokens, vocab, SGT_path):
     SGT_dict = read_SGT(vocab, SGT_path)
     SGTs = list()
     for sent in df_tokens:
-        found = False
-        for tok in SGT_dict.keys():
-            if tok in sent:
-                SGTs.append(SGT_dict[tok])
-                found = True
-                break
-        if not found:
-            SGTs.append(len(SGT_dict))
+        s = [tok for tok in SGT_dict.keys() if tok in sent]
+        s = [len(SGT_dict)] if s == []
+        SGTS.append(s)
+        #found = False
+        #for tok in SGT_dict.keys():
+        #    if tok in sent:
+        #        SGTs.append(SGT_dict[tok])
+        #        found = True
+        #        break
+        #if not found:
+        #    SGTs.append(len(SGT_dict))
         # seq2seq
         # SGTs.append([tok if tok in SGT_dict.values() else 0 for tok in sent])
+    #print(SGT_dict.keys())
     return SGTs, len(SGT_dict)
-
+"""
 def read_SGT(vocab, SGT_path):
     SGTs = [tok.replace("\n", "") for tok in open(SGT_path, "r").readlines()]
     SGTs = [tok for tok in SGTs if tok in vocab]
@@ -176,14 +181,18 @@ def tokens_to_ids(corpus, vocab, SGT_path):
 
     for i, row in enumerate(corpus):
         SGT = len(SGT_dict)
+        #SGT = list()
         for j, tok in enumerate(row):
             for s in SGT_dict.keys():
                 if s in corpus[i][j]:
                     SGT = SGT_dict[s]
+                    #SGT.append(SGT_dict[s])
             try:
                 corpus[i][j] = mapping[corpus[i][j]]
             except:
                 corpus[i][j] = unk_idx
+        #if len(SGT) == 0:
+        #    SGT.append(len(SGT_dict))
         SGTs.append(SGT)
     return corpus, SGTs, len(SGT_dict)
 

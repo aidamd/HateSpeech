@@ -21,6 +21,7 @@ def oversample(source_df, test_df, params):
     print(count, "unique SGTs")
     unique = list(set(SGT))
     unique.sort()
+    print(unique)
     SGT_weights = [1 - (Counter(SGT)[i] / len(SGT)) for i in unique]
 
     model = Unbias(params, vocab, SGT_weights)
