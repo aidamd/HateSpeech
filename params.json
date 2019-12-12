@@ -1,13 +1,16 @@
 {
-  "hidden_size": 128,
-  "SGT_size": 8,
-  "keep_ratio": 0.7,
+  "offensive_epochs": 5,
+  "hate_epochs": 15,
+  "hidden_size": 256,
+  "SGT_size": 128,
+  "keep_ratio": 0.8,
   "vocab_size": 10000,
-  "epochs": 200,
+  "epochs": 30,
   "embedding_size": 300,
   "num_layers": 1,
+  "offensive_learning_rate": 0.001,
   "hate_learning_rate": 0.0001,
-  "SGT_off_learning_rate": 0.0001,
+  "SGT_off_learning_rate": 0.00001,
   "batch_size": 512,
   "SGT_path": "extended_SGT.txt"
 }

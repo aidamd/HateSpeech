@@ -3,7 +3,8 @@ import tensorflow as tf
 from nn import *
 import pandas as pd
 from plot import plot
-from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score, precision_score, recall_score
 
 class Unbias():
     def __init__(self, params, vocab, SGT_weights):
@@ -85,22 +86,24 @@ class Unbias():
         self.task["hate"] = self.classify(self.hate, "hate",
                                           num_labels=2,
                                           labels=self.hate_label,
-                                          scope_name="task")
+                                          scope_name="hate_task")
 
         #self.hate_step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate).minimize(self.task["hate"]["loss"])
         self.loss = self.task["offensive"]["loss"] + self.task["hate"]["loss"] - 0.1 * self.task["SGT_off"]["loss"]
         self.off_loss = self.task["offensive"]["loss"] - 0.1 * self.task["SGT_off"]["loss"]
 
-        self.off_step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate)\
+        self.off_step = tf.train.AdamOptimizer(learning_rate=self.offensive_learning_rate)\
             .minimize(self.task["offensive"]['loss'])
         self.first_min_step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate)\
             .minimize(self.off_loss, var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="task"))
-        self.first_max_step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate)\
+        self.first_max_step = tf.train.AdamOptimizer(learning_rate=self.SGT_off_learning_rate)\
             .minimize(self.off_loss, var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="advers"))
         self.min_step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate)\
             .minimize(self.loss, var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="task"))
         self.max_step = tf.train.AdamOptimizer(learning_rate=self.SGT_off_learning_rate)\
             .minimize(self.loss, var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="advers"))
+        self.hate_step = tf.train.AdamOptimizer(learning_rate=self.hate_learning_rate)\
+            .minimize(self.task["hate"]["loss"], var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="hate_task"))
 
     def classify(self, latent, task_name, num_labels, labels,
                  weights=None, logit_weights=None, scope_name=None):
@@ -130,7 +133,14 @@ class Unbias():
             self.SGT_onehot: [[0 for i in range(self.num_SGT + 1)] for t in batch]
             }
         for i, t in enumerate(batch):
-            feed_dict[self.SGT_onehot][i][t["SGT"]] = 1
+            try:
+                feed_dict[self.SGT_onehot][i][t["SGT"]] = 1
+            except Exception:
+                if predict:
+                    print([self.vocab[r] for r in t["enc_input"]])
+                    print(t["SGT"])
+                    print(self.num_SGT)
+                    exit(1)
         if not predict:
             feed_dict[self.hate_label] = [t["hate"] for t in batch]
             feed_dict[self.offensive_label] = [t["offensive"] for t in batch]
@@ -159,45 +169,65 @@ class Unbias():
                 off_loss, hate_loss, sgt_loss, sgt_off_loss, task_loss = 0, 0, 0, 0, 0
                 off_acc, hate_acc, sgt_acc = 0, 0 ,0
                 off_acc_test, hate_acc_test, sgt_acc_test = 0, 0 ,0
-                train_idx, test_idx = train_test_split(np.arange(len(batches)), test_size=0.2, shuffle=True)
+                train_idx, test_idx = train_test_split(np.arange(len(batches)), test_size=0.14, shuffle=True)
                 train_batches = [batches[i] for i in train_idx]
                 test_batches = [batches[i] for i in test_idx]
                 for batch in train_batches:
-                    if epoch < 50:
-                        _, sgt_off_l = self.sess.run(
+                    if epoch < self.offensive_epochs:
+                        _, off_l = self.sess.run(
                             [self.off_step, self.task["offensive"]["loss"]],
                             feed_dict=self.feed_dict(batch))
-                        sgt_off_loss += sgt_off_l
+                        off_loss += off_l
+
+                    elif epoch > self.hate_epochs:
+                        _, hate_l, hate_a = self.sess.run(
+                            [self.hate_step, self.task["hate"]["loss"],
+                             self.task["hate"]["accuracy"]],
+                            feed_dict=self.feed_dict(batch))
+                        hate_loss += hate_l
+                        hate_acc += hate_a
                         
                     elif epoch % 2 == 0:
                         _, sgt_off_l = self.sess.run(
-                            [self.max_step if epoch > 100 else self.first_max_step, self.task["SGT_off"]["loss"]],
+                            [self.first_max_step, self.task["SGT_off"]["loss"]],
                             feed_dict=self.feed_dict(batch))
                         sgt_off_loss += sgt_off_l
 
                     else:
                         _, task_l, off_l, hate_l = self.sess.run(
-                            [self.min_step if epoch > 100 else self.first_min_step, self.loss, self.task["offensive"]["loss"],
+                            [self.first_min_step, self.loss, self.task["offensive"]["loss"],
                              self.task["hate"]["loss"]],
                             feed_dict=self.feed_dict(batch))
                         hate_loss += hate_l
                         task_loss += task_l
                         off_loss += off_l
 
-                        off_a, hate_a = self.sess.run(
-                            [self.task["offensive"]["accuracy"],
-                             self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch))
-                        hate_acc += hate_a
-                        off_acc += off_a
 
-
+                hate_pred = []
+                off_pred = []
+                hate_labels = []
+                off_labels = []
                 for batch in test_batches:
                     off_a_test, hate_a_test = self.sess.run(
                         [self.task["offensive"]["accuracy"],
                          self.task["hate"]["accuracy"]], feed_dict=self.feed_dict(batch, test=True))
-
+                    off_p, hate_p = self.sess.run([self.task["hate"]["predicted"],
+                        self.task["offensive"]["predicted"]], feed_dict=self.feed_dict(batch, test=True))
+                    off_pred.extend(off_p)
+                    hate_pred.extend(hate_p)
+                    hate_labels.extend([t["hate"] for t in batch])
+                    off_labels.extend([t["offensive"] for t in batch])
                     hate_acc_test += hate_a_test
-                    off_acc_test += off_a_test
+
+                print("Hate train: %.4f, test: %.4f" % (hate_acc / len(train_batches),
+                                                         hate_acc_test / len(test_batches)))
+                print("Hate F1: %.4f, Precision: %.4f, Recall: %.4f" % 
+                    (f1_score(hate_labels, hate_pred), precision_score(hate_labels, hate_pred),
+                    recall_score(hate_labels, hate_pred)))
+                print("Offensive F1: %.4f, Precision: %.4f, Recall: %.4f" %
+                    (f1_score(off_labels, off_pred), precision_score(off_labels, off_pred),
+                    recall_score(off_labels, off_pred)))
+
 
                 if epoch % 2 == 0:
                     print("Epoch: %d, Adversarial loss: %.4f" %

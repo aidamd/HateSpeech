@@ -15,13 +15,13 @@ def oversample(source_df, test_df, params):
     print(source_df.shape[0], "datapoints after removing empty strings")
     df_text = source_df["text"].values.tolist()
     vocab = learn_vocab(df_text, params["vocab_size"])
-    df_tokens, SGT, count = tokens_to_ids(df_text, vocab, params["SGT_path"])
+    df_tokens, SGT, count, SGT_dict = tokens_to_ids(df_text, vocab, params["SGT_path"])
     # SGT, count = extract_SGT(df_tokens, vocab, params["SGT_path"])
     params["num_SGT"] = count
     print(count, "unique SGTs")
     unique = list(set(SGT))
     unique.sort()
-    print(unique)
+    #print(unique)
     SGT_weights = [1 - (Counter(SGT)[i] / len(SGT)) for i in unique]
 
     model = Unbias(params, vocab, SGT_weights)
@@ -38,7 +38,7 @@ def oversample(source_df, test_df, params):
     test_hate = test_df["hate"].values.tolist()
     test_offensive = test_df["offensive"].values.tolist()
     test_text = test_df["text"].values.tolist()
-    test_tokens, SGT, count = tokens_to_ids(test_text, vocab, params["SGT_path"])
+    test_tokens, SGT, count, _ = tokens_to_ids(test_text, vocab, params["SGT_path"], SGT_dict)
     batches = get_batches(test_tokens,
                           params["batch_size"],
                           vocab.index("<pad>"),

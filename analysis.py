@@ -13,13 +13,14 @@ if __name__ == "__main__":
     samples = set(fake["sample"].tolist())
 
     # the changes that changes a non hate text to hate
-    hn = list()
-    hn_change = list()
+    fp = list()
+    fp_change = list()
 
     # the changes that changes a hate text to non hate
-    nh = list()
-    nh_change = list()
+    fn = list()
+    fn_change = list()
 
+    """
     for s in samples:
         subset = fake.loc[fake["sample"] == s]
         if len(set(subset["predicted_hate"])) > 1:
@@ -34,22 +35,31 @@ if __name__ == "__main__":
                     else:
                         nh.append(row["origin_SGT"] + "->" + row["SGT"])
                         nh_change.append(row["SGT"])
+    """
+    for i, row in fake.iterrows():
+        if row["hate"] != row["predicted_hate"]:
+            if row["predicted_hate"] == 1:
+                fp.append(row["origin_SGT"] + "->" + row["SGT"])
+                fp_change.append(row["SGT"])
+            else:
+                fn.append(row["origin_SGT"] + "->" + row["SGT"])
+                fn_change.append(row["SGT"])
 
     print("Changes that made the text hateful")
-    print(Counter(nh))
-    pd.DataFrame.from_dict({"Change": list(Counter(nh).keys()),
-                           "Frequency": list(Counter(nh).values())})\
+    print(Counter(fp))
+    pd.DataFrame.from_dict({"Change": list(Counter(fp).keys()),
+                           "Frequency": list(Counter(fp).values())})\
         .to_csv(args.data + "/became_hate.csv", index=False)
-    pd.DataFrame.from_dict({"Change": list(Counter(nh_change).keys()),
-                           "Frequency": list(Counter(nh_change).values())})\
+    pd.DataFrame.from_dict({"Change": list(Counter(fp_change).keys()),
+                           "Frequency": list(Counter(fp_change).values())})\
         .to_csv(args.data + "/became_hate_SGT.csv", index=False)
 
 
     print("Changes that made the text not hateful")
-    print(Counter(hn))
-    pd.DataFrame.from_dict({"Change": list(Counter(hn).keys()),
-                           "Frequency": list(Counter(hn).values())})\
+    print(Counter(fn))
+    pd.DataFrame.from_dict({"Change": list(Counter(fn).keys()),
+                           "Frequency": list(Counter(fn).values())})\
         .to_csv(args.data + "/became_nonhate.csv", index=False)
-    pd.DataFrame.from_dict({"Change": list(Counter(hn_change).keys()),
-                           "Frequency": list(Counter(hn_change).values())})\
+    pd.DataFrame.from_dict({"Change": list(Counter(fn_change).keys()),
+                           "Frequency": list(Counter(fn_change).values())})\
         .to_csv(args.data + "/became_nonhate_SGT.csv", index=False)

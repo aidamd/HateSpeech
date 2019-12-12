@@ -139,9 +139,18 @@ def extract_SGT(df_tokens, vocab, SGT_path):
     return SGTs, len(SGT_dict)
 """
 def read_SGT(vocab, SGT_path):
-    SGTs = [tok.replace("\n", "") for tok in open(SGT_path, "r").readlines()]
-    SGTs = [tok for tok in SGTs if tok in vocab]
-    return {tok: i for i, tok in enumerate(SGTs)}
+    s = [tok.replace("\n", "") for tok in open(SGT_path, "r").readlines()]
+    SGTs = list(set([tok for tok in s if tok in vocab]))
+    #print(SGTs)
+    #print({tok: i for i, tok in enumerate(SGTs)})
+    SGT_dict = {}
+    for i in range(len(SGTs)):
+        #print(i)
+        #print(SGTs[i])
+        SGT_dict[SGTs[i]] = i
+    #print(SGT_dict)
+    #print(SGTs)
+    return SGT_dict
 
 def clean(sent):
     http = re.sub("https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=/]{2,256}"
@@ -168,15 +177,16 @@ def learn_vocab(corpus, vocab_size):
     words, counts = zip(*sorted(tokens.items(), key=operator.itemgetter(1), reverse=True))
     return list(words[:vocab_size]) + ["<unk>", "<pad>"]
 
-def tokens_to_ids(corpus, vocab, SGT_path):
+def tokens_to_ids(corpus, vocab, SGT_path, SGT_dict=None):
     print("Converting corpus of size %d to word indices based on learned vocabulary" % len(corpus))
     if vocab is None:
         raise ValueError("learn_vocab before converting tokens")
 
     mapping = {word: idx for idx, word in enumerate(vocab)}
     unk_idx = vocab.index("<unk>")
-
-    SGT_dict = read_SGT(vocab, SGT_path)
+    
+    if not SGT_dict:
+        SGT_dict = read_SGT(vocab, SGT_path)
     SGTs = list()
 
     for i, row in enumerate(corpus):
@@ -191,10 +201,13 @@ def tokens_to_ids(corpus, vocab, SGT_path):
                 corpus[i][j] = mapping[corpus[i][j]]
             except:
                 corpus[i][j] = unk_idx
-        #if len(SGT) == 0:
+        #if SGT == len(SGT_dict):
         #    SGT.append(len(SGT_dict))
+            #print([vocab[r] for r in row])
+            #print(len(SGT_dict))
+            #exit(1)
         SGTs.append(SGT)
-    return corpus, SGTs, len(SGT_dict)
+    return corpus, SGTs, len(SGT_dict), SGT_dict
 
 def load_embedding(vocabulary, file_path, embedding_size):
     embeddings = np.random.randn(len(vocabulary), embedding_size)

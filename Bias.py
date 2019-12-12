@@ -1,38 +1,46 @@
 from ntap.data import Dataset
 from ntap.models import RNN
+from sklearn.metrics import f1_score, precision_score, recall_score
 import pandas as pd
 import os
 from nn import *
+from ntap.helpers import CV_Results
 
 class Bias():
-    def __init__(self, data_path, model_path=False, test_data_path=None):
+    def __init__(self, data_path, model_path=False, test_data_path=None, oversample=False):
         self.model_path = model_path
         data = self.initialize_dataset(data_path)
-        model = RNN("hate ~ seq(text)", data=data, learning_rate=0.001, rnn_dropout=0.8)
         vocabs = data.vocab
+        if oversample:
+            data_path = self.generate(pd.read_csv(data_path), vocabs)
+        model = RNN("hate ~ seq(text)", data=data, learning_rate=0.001, rnn_dropout=0.8)
 
         if not os.path.exists(model_path + ".meta"):
-            #results = model.CV(data, num_epochs=10, num_folds=10, batch_size=512)
-            #results.summary()
-
-            """
+            results = model.CV(data, num_epochs=10, num_folds=10, batch_size=512)
+            results.summary()
+            model.train(data, num_epochs=10, batch_size=512, model_path=model_path)
+        else:
             test_data = self.initialize_dataset(test_data_path)
-            y = model.predict(test_data, indices=test_idx.tolist(),
+            y = model.predict(test_data,
                              model_path=model_path)
             labels = dict()
             num_classes = dict()
             for key in y:
                 var_name = key.replace("prediction-", "")
-                test_y, card = data.get_labels(idx=test_idx, var=var_name)
+                test_y, card = data.get_labels(idx=range(test_data.data.shape[0]), var=var_name)
                 labels[key] = test_y
-                num_classes[key] = card
-            stats = self.evaluate(y, labels, num_classes)  # both dict objects
-            results.append(stats)
-            CV_Results(results)
-            """
-            model.train(data, num_epochs=10, batch_size=512, model_path=model_path)
+                num_classes[key] = 2
+            print(labels)
+            print(y)
+            print(f1_score(labels["prediction-hate"], y["prediction-hate"]))
+            stats = model.evaluate(y, labels, num_classes)  # both dict objects
+            print(stats)
+            #CV_Results(results)
+            
+            
 
-        fake_data_path = self.generate_fake(data_path, vocabs)
+        #fake_data_path = self.generate_fake(data_path, vocabs)
+        fake_data_path = "Data/24k/fake_test.csv"
         fake_data = self.initialize_dataset(fake_data_path)
 
         predictions = model.predict(fake_data, orig_data=data, model_path=model_path,
@@ -46,38 +54,22 @@ class Bias():
                         mallet_path="/home/aida/Data/mallet/mallet-2.0.8/bin/mallet",
                         glove_path="/home/aida/Data/word_embeddings/GloVe/glove.840B.300d.txt")
         data.clean("text")
+        data.encode_docs("text")
         return data
 
-    def generate_fake(self, data_path, vocabs):
-        source_df = pd.read_csv(data_path)
-        print(source_df.shape[0], "datapoints")
-
-        source_df = tokenize_data(source_df, "text")
-        source_df = remove_empty(source_df, "text")
-        print(source_df.shape[0], "datapoints after removing empty strings")
-        fake = self.expand(source_df, "extended_SGT.txt", vocabs)
-        fake_path = os.path.split(data_path)[0] + "/fake_gab.csv"
-        fake.to_csv(fake_path)
-        return fake_path
-
-    def expand(self, corpus, SGT_path, vocabs):
+    def generate(self, corpus, vocabs, SGT_path="extended_SGT.txt"):
         SGTs = [tok.replace("\n", "") for tok in open(SGT_path, "r").readlines()]
         SGTs = [tok for tok in SGTs if tok in vocabs]
-        fake_df = {"text": list(),
-                   "hate": list(),
-                   "sample": list(),
-                   "SGT": list(),
-                   "origin_SGT": list()}
 
         for i, row in corpus.iterrows():
             for j, tok in enumerate(row["text"]):
                 for s in SGTs:
                     if s in tok:
                         text = " ".join(word for word in row["text"])
-                        fake_df["text"].extend([text.replace(tok, _sgt) for _sgt in SGTs])
-                        fake_df["hate"].extend([row["hate"] for t in SGTs])
-                        fake_df["sample"].extend([i for t in SGTs])
-                        fake_df["SGT"].extend([t for t in SGTs])
-                        fake_df["origin_SGT"].extend([s for t in SGTs])
+                        texts = [text.replace(tok, _sgt) for _sgt in SGTs]
+                        new_df = {col: [row[col] for i in range(len(texts))] for col in corpus.columns}
+                        new_df["text"] = texts
+                        corpus.append(pd.DataFrame.from_dict(new_df))
+        corpus.to_csv("Data/extended_gab.csv", index=False)
+        return "Data/extended_gab.csv"
 
-        return pd.DataFrame.from_dict(fake_df)
