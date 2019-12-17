@@ -1,9 +1,10 @@
-import tensorflow as tf
+from sklearn.metrics import f1_score, precision_score, recall_score
 import numpy as np
 from nltk import tokenize as nltk_token
 import operator
 import re
 import random
+from collections import Counter
 
 def get_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
     batches = []
@@ -18,6 +19,23 @@ def get_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
             data_info = batch_to_info(data_batch, hate_batch, offensive_batch, SGT, pad_idx)
             batches.append(data_info)
     return batches
+
+def preprocess(df):
+    print(df.shape[0], "datapoints in dataset")
+    df = tokenize_data(df, "text")
+    df = remove_empty(df, "text")
+    print(df.shape[0], "datapoints after removing empty strings")
+    return df
+
+def prediction_results(df, pred, labels):
+    for label in labels:
+        y = df[label].values.tolist()
+        print(label, ": F1 score:", f1_score(y, pred[label]),
+              ", Precision:", precision_score(y, pred[label]),
+              ", Recall:", recall_score(y, pred[label])
+              )
+        print(Counter(y))
+        print(Counter(pred["hate"]))
 
 def get_balanced_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
     batches = list()
