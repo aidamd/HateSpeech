@@ -3,71 +3,15 @@ import numpy as np
 from nltk import tokenize as nltk_token
 import operator
 import re
-
-
-def generator(Z, hidden_size, vocab_len, label):
-    with tf.variable_scope("GAN/Generator", reuse=tf.AUTO_REUSE):
-        h1 = tf.layers.dense(Z, hidden_size, activation=tf.nn.leaky_relu)
-        out = tf.layers.dense(h1, vocab_len, activation=tf.tanh)
-    return out
-
-
-def discriminator(X_real, X_fake, filter_sizes, num_filters, keep_ratio, scope, label):
-    cnn_real = cnn(X_real, filter_sizes, num_filters, keep_ratio, scope)
-    cnn_fake = cnn(X_fake, filter_sizes, num_filters, keep_ratio, scope, reuse=True)
-
-    class_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=tf.ones_like(cnn_real) if label == 1 else tf.zeros_like(cnn_real)
-        , logits=cnn_real))
-
-    disc_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=tf.ones_like(cnn_real), logits=cnn_real)) + \
-             tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                 labels=tf.zeros_like(cnn_fake), logits=cnn_fake))
-    gen_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=tf.ones_like(cnn_real), logits=cnn_fake))
-    return disc_loss, gen_loss, class_loss
-
-def cnn(input, filter_sizes, num_filters, keep_ratio, scope, padding="VALID", reuse=False):
-    dim = input.get_shape().as_list()[-1]
-    input = tf.expand_dims(input, -1)
-
-    with tf.variable_scope(scope) as vs:
-        if reuse:
-            vs.reuse_variables()
-
-        pooled_outputs = list()
-        for size in filter_sizes:
-            with tf.variable_scope('conv-maxpool-%s' % size):
-                b = tf.get_variable('b', shape=[num_filters])
-                W = tf.get_variable('W', shape=[size, dim, 1, num_filters])
-
-                conv = tf.nn.conv2d(input, W,
-                    strides=[1, 1, 1, 1], padding=padding)
-                relu = tf.nn.relu(tf.nn.bias_add(conv, b))
-
-                pooled = tf.reduce_max(relu, axis=1, keep_dims=True)
-                pooled_outputs.append(pooled)
-
-        num_filters_total = num_filters * len(filter_sizes)
-        h_pool = tf.concat(pooled_outputs, 3)
-        h_pool_flat = tf.reshape(h_pool, [-1, num_filters_total])
-
-        drop = tf.nn.dropout(h_pool_flat, keep_ratio)
-
-        with tf.variable_scope('output'):
-            W = tf.get_variable('W', [num_filters * len(filter_sizes), 1])
-            b = tf.get_variable('b', [1])
-            logits = tf.reshape(tf.matmul(drop, W) + b, [-1])
-
-    return logits
+import random
 
 def get_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
     batches = []
     for idx in range(len(data) // batch_size + 1):
         if idx * batch_size !=  len(data):
             data_batch = data[idx * batch_size: min((idx + 1) * batch_size, len(data))]
-            hate_batch = hate[idx * batch_size: min((idx + 1) * batch_size, len(hate))] if hate else None
+            hate_batch = hate[idx * batch_size: min((idx + 1) * batch_size, len(hate))] \
+                if hate else None
             offensive_batch = offensive[idx * batch_size: min((idx + 1) * batch_size, len(offensive))] \
                 if hate else None
 
@@ -90,8 +34,8 @@ def get_balanced_batches(data, batch_size, pad_idx, hate=None, offensive=None, S
 def balanced_batch_indices(size, batch_size, hate):
     # produce iterable of (start, end) batch indices
     for i in range(0, size, batch_size):
-        true_idx = np.random.choice(np.where(np.array(hate) == 1)[0], int(batch_size * .1))
-        false_idx = np.random.choice(np.where(np.array(hate) == 0)[0], int(batch_size * .9))
+        true_idx = np.random.choice(np.where(np.array(hate) == 1)[0], int(batch_size * .3))
+        false_idx = np.random.choice(np.where(np.array(hate) == 0)[0], int(batch_size * .7))
         sub_idx = np.concatenate((true_idx, false_idx), axis=0)
         np.random.shuffle(sub_idx)
         yield sub_idx
@@ -117,40 +61,12 @@ def tokenize_data(corpus, col):
     for idx, row in corpus.iterrows():
         corpus.at[idx, col] = nltk_token.WordPunctTokenizer().tokenize(clean(row[col]))
     return corpus
-"""
-def extract_SGT(df_tokens, vocab, SGT_path):
-    SGT_dict = read_SGT(vocab, SGT_path)
-    SGTs = list()
-    for sent in df_tokens:
-        s = [tok for tok in SGT_dict.keys() if tok in sent]
-        s = [len(SGT_dict)] if s == []
-        SGTS.append(s)
-        #found = False
-        #for tok in SGT_dict.keys():
-        #    if tok in sent:
-        #        SGTs.append(SGT_dict[tok])
-        #        found = True
-        #        break
-        #if not found:
-        #    SGTs.append(len(SGT_dict))
-        # seq2seq
-        # SGTs.append([tok if tok in SGT_dict.values() else 0 for tok in sent])
-    #print(SGT_dict.keys())
-    return SGTs, len(SGT_dict)
-"""
+
 def read_SGT(vocab, SGT_path):
     s = [tok.replace("\n", "") for tok in open(SGT_path, "r").readlines()]
     SGTs = list(set([tok for tok in s if tok in vocab]))
-    #print(SGTs)
-    #print({tok: i for i, tok in enumerate(SGTs)})
-    SGT_dict = {}
-    for i in range(len(SGTs)):
-        #print(i)
-        #print(SGTs[i])
-        SGT_dict[SGTs[i]] = i
-    #print(SGT_dict)
-    #print(SGTs)
-    return SGT_dict
+    random.shuffle(SGTs)
+    return {tok: i for i, tok in enumerate(SGTs)}
 
 def clean(sent):
     http = re.sub("https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=/]{2,256}"

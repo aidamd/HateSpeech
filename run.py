@@ -3,12 +3,11 @@ import pandas as pd
 from Unbias import Unbias
 from nn import *
 import argparse
-import pickle
 from sklearn.metrics import f1_score, precision_score, recall_score
 from collections import Counter
 
 
-def oversample(source_df, test_df, params):
+def initialize_model(source_df, params):
     print(source_df.shape[0], "datapoints")
     source_df = tokenize_data(source_df, "text")
     source_df = remove_empty(source_df, "text")
@@ -16,22 +15,27 @@ def oversample(source_df, test_df, params):
     df_text = source_df["text"].values.tolist()
     vocab = learn_vocab(df_text, params["vocab_size"])
     df_tokens, SGT, count, SGT_dict = tokens_to_ids(df_text, vocab, params["SGT_path"])
-    # SGT, count = extract_SGT(df_tokens, vocab, params["SGT_path"])
+
     params["num_SGT"] = count
     print(count, "unique SGTs")
     unique = list(set(SGT))
     unique.sort()
-    #print(unique)
-    SGT_weights = [1 - (Counter(SGT)[i] / len(SGT)) for i in unique]
 
-    model = Unbias(params, vocab, SGT_weights)
-    batches = get_balanced_batches(df_tokens,
+    sgt_W = [1 - (Counter(SGT)[i] / len(SGT)) for i in unique]
+    hate_W = [1 - (Counter(source_df["hate"])[i] / source_df.shape[0]) for i in [0, 1]]
+    off_W = [1 - (Counter(source_df["offensive"])[i] / source_df.shape[0]) for i in [0, 1]]
+
+    model = Unbias(params, vocab, sgt_W, hate_W, off_W)
+    batches = get_batches(df_tokens,
                           model.batch_size,
                           vocab.index("<pad>"),
                           source_df["hate"].tolist(),
                           source_df["offensive"].tolist(),
                           SGT=SGT)
     model.train(batches)
+    return model, vocab, SGT_dict
+
+def test_model(test_df, vocab, model, SGT_dict):
     test_df = tokenize_data(test_df, "text")
     test_df = remove_empty(test_df, "text")
     print(test_df.shape[0], "datapoints in test data")
@@ -57,12 +61,6 @@ def oversample(source_df, test_df, params):
           )
     print(Counter(test_offensive))
     print(Counter(test_predictions["offensive"]))
-    #print("SGT: F1 score:", f1_score(SGT, test_predictions["SGT"], average="macro"),
-    #      ", Precision:", precision_score(SGT, test_predictions["SGT"], average="macro"),
-    #      ", Recall:", recall_score(SGT, test_predictions["SGT"], average="macro")
-    #      )
-    #print(Counter(SGT))
-    #print(Counter(test_predictions["SGT"]))
 
 
 if __name__ == '__main__':
@@ -75,13 +73,13 @@ if __name__ == '__main__':
 
     data = pd.read_csv(args.data)
     test = pd.read_csv(args.test)
-
-
     try:
         with open(args.params, 'r') as fo:
             params = json.load(fo)
     except Exception:
         print("Wrong params file")
         exit(1)
-    oversample(data, test, params)
+    model, vocab, SGT = initialize_model(data, params)
+    test_model(test, vocab, model, SGT)
+
 

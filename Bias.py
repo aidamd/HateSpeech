@@ -35,9 +35,7 @@ class Bias():
             print(f1_score(labels["prediction-hate"], y["prediction-hate"]))
             stats = model.evaluate(y, labels, num_classes)  # both dict objects
             print(stats)
-            #CV_Results(results)
-            
-            
+            #CV_Results(results) 
 
         #fake_data_path = self.generate_fake(data_path, vocabs)
         fake_data_path = "Data/24k/fake_test.csv"
