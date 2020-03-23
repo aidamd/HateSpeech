@@ -207,7 +207,7 @@ class Unbias():
                     # training "Offensive - SGT" or "SGT" in every other epoch
                     elif epoch % 2 == 0:
                         _, sgt_off_l, all_l = self.sess.run(
-                            [self.steps["max_all"], self.task["SGT_off"]["loss"],
+                            [self.steps["max_off_sgt"], self.task["SGT_off"]["loss"],
                              self.loss["off_sgt"]],
                             feed_dict=self.feed_dict(batch))
                         epoch_losses["sgt_off"] += sgt_off_l
@@ -215,7 +215,7 @@ class Unbias():
 
                     else:
                         _, off_l, off_a = self.sess.run(
-                            [self.steps["min_all"], self.task["offensive"]["loss"],
+                            [self.steps["min_off_sgt"], self.task["offensive"]["loss"],
                              self.task["offensive"]["accuracy"]],
                             feed_dict=self.feed_dict(batch))
                         epoch_losses["off"] += off_l

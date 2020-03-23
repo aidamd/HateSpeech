@@ -1,6 +1,8 @@
 from nn import *
 import pandas as pd
 import numpy as np
+import argparse
+import os
 
 def generate_fake(data_path="Data/24k/gab_train.csv", test_path="Data/24k/gab_test.csv"):
     source_df = pd.read_csv(data_path)
@@ -24,7 +26,7 @@ def generate_fake(data_path="Data/24k/gab_train.csv", test_path="Data/24k/gab_te
     print(len(balaced))
 
     fake = expand(SGT_test.iloc[balaced,:], vocabs)
-    fake.to_csv("Data/24k/fake_test.csv", index=False)
+    fake.to_csv(os.path.split(data_path)[0] + "/fake_test.csv", index=False)
     print(fake.shape)
 
 def get_SGTs(corpus, vocabs, SGT_path="extended_SGT.txt"):
@@ -65,4 +67,9 @@ def expand(corpus, vocabs, SGT_path="extended_SGT.txt"):
     return pd.DataFrame.from_dict(fake_df)
 
 if __name__ == '__main__':
-    generate_fake()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train", help="")
+    parser.add_argument("--test", help="")
+    args = parser.parse_args()
+
+    generate_fake(data_path=args.train, test_path=args.test)

@@ -37,6 +37,9 @@ def prediction_results(df, pred, labels):
         print(Counter(y))
         print(Counter(pred["hate"]))
 
+def cal_weights(l):
+    return [1 - (Counter(l)[i] / len(l)) for i in [0, 1]]
+
 def get_balanced_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
     batches = list()
     for sub_idx in balanced_batch_indices(len(data), batch_size, hate):

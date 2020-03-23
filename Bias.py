@@ -13,12 +13,12 @@ class Bias():
         vocabs = data.vocab
         if oversample:
             data_path = self.generate(pd.read_csv(data_path), vocabs)
-        model = RNN("hate ~ seq(text)", data=data, learning_rate=0.001, rnn_dropout=0.8)
+        model = RNN("hate ~ seq(text)", data=data, learning_rate=0.0005, rnn_dropout=0.8)
 
         if not os.path.exists(model_path + ".meta"):
-            results = model.CV(data, num_epochs=10, num_folds=10, batch_size=512)
+            results = model.CV(data, num_epochs=15, num_folds=10, batch_size=512)
             results.summary()
-            model.train(data, num_epochs=10, batch_size=512, model_path=model_path)
+            model.train(data, num_epochs=15, batch_size=256, model_path=model_path)
         else:
             test_data = self.initialize_dataset(test_data_path)
             y = model.predict(test_data,
@@ -30,15 +30,12 @@ class Bias():
                 test_y, card = data.get_labels(idx=range(test_data.data.shape[0]), var=var_name)
                 labels[key] = test_y
                 num_classes[key] = 2
-            print(labels)
-            print(y)
-            print(f1_score(labels["prediction-hate"], y["prediction-hate"]))
             stats = model.evaluate(y, labels, num_classes)  # both dict objects
             print(stats)
             #CV_Results(results) 
 
         #fake_data_path = self.generate_fake(data_path, vocabs)
-        fake_data_path = "Data/24k/fake_test.csv"
+        fake_data_path = "Data/28k/fake_test.csv"
         fake_data = self.initialize_dataset(fake_data_path)
 
         predictions = model.predict(fake_data, orig_data=data, model_path=model_path,
