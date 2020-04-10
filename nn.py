@@ -5,6 +5,7 @@ import operator
 import re
 import random
 from collections import Counter
+import json
 
 def get_batches(data, batch_size, pad_idx, hate=None, offensive=None, SGT=None):
     batches = []
@@ -84,8 +85,14 @@ def tokenize_data(corpus, col):
     return corpus
 
 def read_SGT(vocab, SGT_path):
-    s = [tok.replace("\n", "") for tok in open(SGT_path, "r").readlines()]
-    SGTs = list(set([tok for tok in s if tok in vocab]))
+    if SGT_path.ends_with(".txt"):
+        s = [tok.replace("\n", "") for tok in open(SGT_path, "r").readlines()]
+        SGTs = list(set([tok for tok in s if tok in vocab]))
+    else:
+        s = json.load(open(SGT_path, "r"))["SGT"]
+        SGTs = list(s[cat] for cat in s)
+        SGTs = [sgt for cat in SGTs for sgt in cat]
+        SGTs = list(set([tok for tok in SGTs if tok in vocab]))
     random.shuffle(SGTs)
     return {tok: i for i, tok in enumerate(SGTs)}
 
@@ -115,7 +122,8 @@ def learn_vocab(corpus, vocab_size):
     return list(words[:vocab_size]) + ["<unk>", "<pad>"]
 
 def tokens_to_ids(corpus, vocab, SGT_path, SGT_dict=None):
-    print("Converting corpus of size %d to word indices based on learned vocabulary" % len(corpus))
+    print("Converting corpus of size %d to word indices based "
+          "on learned vocabulary" % len(corpus))
     if vocab is None:
         raise ValueError("learn_vocab before converting tokens")
 
@@ -127,22 +135,14 @@ def tokens_to_ids(corpus, vocab, SGT_path, SGT_dict=None):
     SGTs = list()
 
     for i, row in enumerate(corpus):
-        SGT = len(SGT_dict)
-        #SGT = list()
+        #SGT = len(SGT_dict)
+
         for j, tok in enumerate(row):
-            for s in SGT_dict.keys():
-                if s in corpus[i][j]:
-                    SGT = SGT_dict[s]
-                    #SGT.append(SGT_dict[s])
             try:
                 corpus[i][j] = mapping[corpus[i][j]]
             except:
                 corpus[i][j] = unk_idx
-        #if SGT == len(SGT_dict):
-        #    SGT.append(len(SGT_dict))
-            #print([vocab[r] for r in row])
-            #print(len(SGT_dict))
-            #exit(1)
+        SGT = [1 if sgt in row else 0 for sgt in SGT_dict]
         SGTs.append(SGT)
     return corpus, SGTs, len(SGT_dict), SGT_dict
 
